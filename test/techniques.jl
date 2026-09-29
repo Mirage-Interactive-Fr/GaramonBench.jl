@@ -22,7 +22,7 @@
         for row in inventory["techniques"])
     @test all(row["source_present"] for row in inventory["techniques"]
         if row["state"]!="research")
-    matrix=compatibility_matrix(joinpath(@__DIR__,"..","docs","technique_compatibility.md"))
+    matrix=compatibility_matrix(joinpath(@__DIR__,"..","config","compatibility_matrix.csv"))
     @test length(matrix)==46^2
     @test matrix[("10","11")]=="X1"
     @test matrix[("11","10")]=="X1"

@@ -84,8 +84,8 @@ function _render_bench_plot_loaded(xkcd,rows,plot_pdf)
     xkcd.with_theme(style) do
         figure=xkcd.Figure(size=(800,460),backgroundcolor=:white)
         axis=xkcd.Axis(figure[1,1],
-            title="EGA3 : 1 024 produits ("*string(length(rows))*"/3 voies validées)",
-            xlabel="Temps median par lot (microsecondes)",
+            title="EGA3: 1,024 products ("*string(length(rows))*"/3 validated routes)",
+            xlabel="Median time per batch (microseconds)",
             yticks=(1:length(rows),labels),ygridvisible=false,xgridvisible=true)
         xkcd.barplot!(axis,1:length(rows),medians;direction=:x,
             color=[:steelblue3,:darkorange2,:seagreen3][1:length(rows)],

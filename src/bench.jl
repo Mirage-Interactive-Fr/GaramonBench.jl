@@ -13,7 +13,7 @@ function _refresh_external_article(archive::AbstractString,condition::AbstractSt
     benchmark=load_config(joinpath(root,"config","external_ga_vector_bench.toml"))
     benchmark["campaign"]["condition"]=condition
     figure_dir,paper_dir,_=_external_article_dirs(archive,condition)
-    source=joinpath(root,"papers","Garamon_article_recherche_2026-09-27.tex")
+    source=joinpath(root,"papers","Garamon_research_article_2026-09-27_en.tex")
     all(isfile(joinpath(figure_dir,"exploratory_"*key*".pdf")) &&
         mtime(joinpath(figure_dir,"exploratory_"*key*".pdf"))>=mtime(source)
         for key in keys(EXPLORATORY_FIGURES)) ||
@@ -22,7 +22,7 @@ function _refresh_external_article(archive::AbstractString,condition::AbstractSt
     isempty(rows) || _render_bench_plot(rows,
         joinpath(figure_dir,"ega3_vector_libraries.pdf"))
     pdf=_compile_bench_article(source,figure_dir,paper_dir)
-    println("Article actualisé : ",length(rows),"/3 voies ; ",pdf)
+    println("Article updated: ",length(rows),"/3 validated routes; ",pdf)
     pdf
 end
 
@@ -52,7 +52,7 @@ function bench(; output::Union{Nothing,AbstractString}=nothing, isolated::Bool=f
     resumable_status(preflight, preflight_output)["status"] == "complete" ||
         error("external GA preflight incomplete")
     condition=isolated ? "isolated" : "exploratory"
-    article_source=joinpath(root,"papers","Garamon_article_recherche_2026-09-27.tex")
+    article_source=joinpath(root,"papers","Garamon_research_article_2026-09-27_en.tex")
     function on_progress(archive,completed,total)
         isempty(completed) && return
         try

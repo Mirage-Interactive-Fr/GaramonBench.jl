@@ -1,6 +1,28 @@
 schema_version = 1
-compatibility_matrix = "docs/technique_compatibility.md"
+compatibility_matrix = "config/compatibility_matrix.csv"
 meaning = "source/prototype/research inventory; no entry is benchmark-qualified by this file"
+
+[compatibility_conditions]
+C1 = "Convert representations and bases explicitly; preserve the algebra element and requested output, and count conversion costs."
+C2 = "Prepare only reusable structure; key it by metric, basis, supports, output, scalar type, and relevant certificates, then revalidate changes."
+C3 = "Use a private workspace with explicit borrowed-output lifetime; budget plans, buffers, copies, and JIT memory together."
+C4 = "Compile or cache native code only for a stable contract; account for JIT time, code size, reloads, version, and ISA compatibility."
+C5 = "Preserve algebraic order, requested outputs, dependencies, and declared floating-point semantics; invalidate cached values after changes."
+C6 = "Certify support and grade structure and maintain closure; observed sparsity alone is not a structural identity."
+C7 = "For binary-rank reduction, preserve the embedding, cocycle, ambient grade, and requested outputs; the reduced law need not be a standard Clifford algebra."
+C8 = "Request an invariant sector explicitly and verify projector and action compatibility; general outputs require all relevant sectors and recomposition."
+C9 = "Certify the radical and preserve its filtration and inverse order; an isotropic vector is not necessarily in the radical."
+C10 = "Match the specialized output and prove its prerequisite: vector-chain scalar for Pfaffian, element identity for minimal polynomial, or certified factors for Gaussian routes."
+C11 = "Define the interface representation and measure expansion, rank or width, fallback, and output conversion."
+C12 = "Use an explicit approximate contract and global error budget; exact output requires replay from intact inputs or a sufficient deterministic certificate."
+C13 = "Confirm that threads, processes, or GPU execute the required kernel and types; partition without races and include synchronization, transfers, and reduction order."
+C14 = "For multimodular computation, handle denominators, bad primes, CRT bounds, and reconstruction; a few zero modular residues do not certify zero."
+C15 = "Certify a sign filter against all prior errors and fall back exactly on ambiguous results; test underflow, NaN, and near-zero inputs."
+C16 = "Apply synthesis or superoptimization only to a fixed-contract subkernel, with equivalence proved for the target field and machine model before timing."
+C17 = "Construct frontiers from avoidable or groupable work; bound queues and measure fragmentation, compaction, and local fallback depth."
+C18 = "Justify a materialized index by lookup reuse; preserve signs and orientation and include build, maintenance, and memory costs."
+C19 = "Keep selector choices behind exact guards; include feature extraction, selection, conversion, and preparation; split training and testing by family."
+C20 = "Compose certificates through each transformation, track dependencies, and revalidate or fall back to an explicit exact route if a property is lost."
 
 [[technique]]
 id = "01"

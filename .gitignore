@@ -1,8 +1,15 @@
 /data/
 /results/
 /plots/
+/outputs/
 /papers/garamonbench/
 /build/
+*.pdf
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.synctex.gz
 *.so
 *.o
 *.a

@@ -48,6 +48,8 @@ function technique_inventory(;benchmark_root=dirname(@__DIR__),
         isfile(joinpath(julia_root,c["test"])),combinations) ||
         error("declared combination source or test is unavailable")
     matrix=compatibility_matrix(joinpath(benchmark_root,registry["compatibility_matrix"]))
+    Set(keys(registry["compatibility_conditions"]))==Set("C"*string(n) for n in 1:20) ||
+        error("compatibility conditions must define C1..C20")
     pairs=Dict{String,Any}[]
     for a in 1:45,b in a+1:46
         left=ids[a];right=ids[b];code=matrix[(left,right)]
@@ -65,30 +67,22 @@ function technique_inventory(;benchmark_root=dirname(@__DIR__),
         "note"=>"source/test file existence is only static evidence; no technique is promoted to preflight or profiling qualification")
 end
 
-"""Parse the full mathematical contract matrix and require 46x46 symmetry."""
+"""Read the machine-readable contract matrix and require 46x46 symmetry."""
 function compatibility_matrix(path::AbstractString)
     isfile(path) || error("compatibility matrix missing")
     matrix=Dict{Tuple{String,String},String}()
-    begin_col=0;end_col=0;in_matrix=false
-    for line in eachline(path)
-        line=="## Matrice complète" && (in_matrix=true;continue)
-        in_matrix && startswith(line,"## ") && break
-        in_matrix || continue
-        heading=match(r"^### Colonnes (\d{2})–(\d{2})$",line)
-        if heading!==nothing
-            begin_col=parse(Int,heading[1]);end_col=parse(Int,heading[2])
-            continue
-        end
-        begin_col==0 && continue
-        startswith(line,"|") || continue
-        cells=strip.(split(line,'|')[2:end-1])
-        length(cells)==end_col-begin_col+2 || continue
-        row=match(r"^(\d{2}) ",first(cells))
-        row===nothing && continue
+    ids=[lpad(string(i),2,'0') for i in 1:46]
+    lines=readlines(path)
+    length(lines)==47 || error("compatibility matrix must contain one header and 46 rows")
+    split(first(lines),',')==vcat("id",ids) || error("compatibility matrix header invalid")
+    for (index,line) in enumerate(lines[2:end])
+        cells=split(line,',')
+        length(cells)==47 && first(cells)==ids[index] ||
+            error("compatibility matrix row invalid: $index")
         for (offset,code) in enumerate(cells[2:end])
             code in COMPATIBILITY_CODES || occursin(r"^C([1-9]|1[0-9]|20)$",code) ||
                 error("unknown compatibility code "*code)
-            key=(row[1],lpad(string(begin_col+offset-1),2,'0'))
+            key=(ids[index],ids[offset])
             haskey(matrix,key) && error("duplicate compatibility cell")
             matrix[key]=code
         end
