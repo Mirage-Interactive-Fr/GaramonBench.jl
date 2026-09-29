@@ -8,21 +8,31 @@ function _external_article_dirs(archive::AbstractString,condition::AbstractStrin
     figure_dir,paper_dir,signature
 end
 
+function _sync_qualified_external_figure(figure::AbstractString,
+    condition::AbstractString,completed::Integer,expected::Integer)
+    qualified=joinpath(dirname(figure),"qualified_ega3_vector_libraries.pdf")
+    if condition=="isolated" && completed==expected
+        cp(figure,qualified;force=true)
+    elseif isfile(qualified)
+        rm(qualified)
+    end
+    qualified
+end
+
 function _refresh_external_article(archive::AbstractString,condition::AbstractString)
     root=dirname(@__DIR__)
     benchmark=load_config(joinpath(root,"config","external_ga_vector_bench.toml"))
     benchmark["campaign"]["condition"]=condition
     figure_dir,paper_dir,_=_external_article_dirs(archive,condition)
     source=joinpath(root,"papers","Garamon_research_article_2026-09-27_en.tex")
-    all(isfile(joinpath(figure_dir,"exploratory_"*key*".pdf")) &&
-        mtime(joinpath(figure_dir,"exploratory_"*key*".pdf"))>=mtime(source)
-        for key in keys(EXPLORATORY_FIGURES)) ||
-        render_exploratory_figures(source,figure_dir)
     rows=_bench_completed_rows(benchmark,archive)
-    isempty(rows) || _render_bench_plot(rows,
-        joinpath(figure_dir,"ega3_vector_libraries.pdf"))
-    pdf=_compile_bench_article(source,figure_dir,paper_dir)
-    println("Article updated: ",length(rows),"/3 validated routes; ",pdf)
+    figure=joinpath(figure_dir,"ega3_vector_libraries.pdf")
+    isempty(rows) || _render_bench_plot(rows,figure)
+    expected=length(benchmark["grid"]["strategy"])
+    _sync_qualified_external_figure(figure,condition,length(rows),expected)
+    pdf=_compile_bench_article(source,figure_dir,paper_dir;
+        publish_canonical=condition=="isolated")
+    println("Article updated: ",length(rows),"/",expected," validated routes; ",pdf)
     pdf
 end
 
@@ -71,13 +81,12 @@ function bench(; output::Union{Nothing,AbstractString}=nothing, isolated::Bool=f
     summary_csv,rows=_bench_summary(benchmark,benchmark_output,destination)
     medians=Dict(row.library=>row.median_ns for row in rows)
     figure_dir,paper_dir,signature=_external_article_dirs(benchmark_output,condition)
-    all(isfile(joinpath(figure_dir,"exploratory_"*key*".pdf")) &&
-        mtime(joinpath(figure_dir,"exploratory_"*key*".pdf"))>=mtime(article_source)
-        for key in keys(EXPLORATORY_FIGURES)) ||
-        render_exploratory_figures(article_source,figure_dir)
     figure_pdf=_render_bench_plot(summary_csv,
         joinpath(figure_dir,"ega3_vector_libraries.pdf"))
-    article_pdf=_compile_bench_article(article_source,figure_dir,paper_dir)
+    _sync_qualified_external_figure(figure_pdf,condition,length(rows),
+        length(benchmark["grid"]["strategy"]))
+    article_pdf=_compile_bench_article(article_source,figure_dir,paper_dir;
+        publish_canonical=isolated)
     _resume_write(joinpath(destination,"report.toml"),
         Dict("summary_csv"=>summary_csv,"summary_sha256"=>_resume_sha(summary_csv),
             "figure_pdf"=>figure_pdf,"figure_sha256"=>_resume_sha(figure_pdf),

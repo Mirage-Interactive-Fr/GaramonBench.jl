@@ -119,7 +119,8 @@ end
 _render_bench_plot(summary_csv::AbstractString,plot_pdf)=
     _render_bench_plot(_report_rows(summary_csv),plot_pdf)
 
-function _compile_bench_article(tex_source,plot_dir,paper_dir)
+function _compile_bench_article(tex_source,plot_dir,paper_dir;
+    publish_canonical::Bool=true)
     compiler=Sys.which("latexmk")
     isnothing(compiler) && error("latexmk is required to compile the article after benchmarking")
     isfile(tex_source) || error("Garamon article source is missing")
@@ -141,6 +142,7 @@ function _compile_bench_article(tex_source,plot_dir,paper_dir)
     pdf=joinpath(paper_dir,splitext(basename(tex_source))[1]*".pdf")
     isfile(pdf) && filesize(pdf)>0 || error("LaTeX did not produce the article PDF")
     canonical=joinpath(dirname(tex_source),basename(pdf))
-    abspath(pdf)==abspath(canonical) || cp(pdf,canonical;force=true)
+    publish_canonical && abspath(pdf)!=abspath(canonical) &&
+        cp(pdf,canonical;force=true)
     pdf
 end
