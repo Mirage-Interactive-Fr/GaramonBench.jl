@@ -20,6 +20,7 @@ export BenchmarkAdapter, register_adapter!, load_config, expand_cases, case_id,
        compatibility_matrix, ensure_cpp_source, cpp_source_root, cpp_source_revision,
        cpp_toolchain, cpp_toolchain_environment,
        external_ga_candidates, ensure_external_ga_source, bench
+export render_exploratory_figures
 
 include("cpp_install.jl")
 include("external_ga.jl")
@@ -37,6 +38,7 @@ include("bounds_b1.jl")
 include("cli.jl")
 include(joinpath(@__DIR__, "..", "adapters", "external_ga_vector_product.jl"))
 include("report.jl")
+include("article_figures.jl")
 include("bench.jl")
 
 function __init__()

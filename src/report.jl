@@ -51,12 +51,30 @@ function _report_rows(path)
     [Dict(zip(header,split(line,','))) for line in lines[2:end]]
 end
 
-function _render_bench_plot_loaded(xkcd,summary_csv,plot_pdf)
-    rows=_report_rows(summary_csv)
-    length(rows)==3 || error("EGA3 library chart requires exactly three cases")
+function _bench_completed_rows(config,benchmark_output)
+    rows=Dict{String,String}[]
+    for case in expand_cases(config)
+        directory=joinpath(benchmark_output,"cases",case_id(case))
+        isfile(joinpath(directory,"completion.toml")) || continue
+        times=_bench_warm_times(joinpath(directory,"samples.csv"))
+        length(times)==config["limits"]["samples"] ||
+            error("incomplete warm samples for "*case["strategy"])
+        push!(rows,Dict("library"=>case["strategy"],
+            "dimension"=>string(case["dimension"]),"horizon"=>string(case["horizon"]),
+            "median_ns"=>string(median(times)),
+            "condition"=>config["campaign"]["condition"]))
+    end
+    rows
+end
+
+function _render_bench_plot_loaded(xkcd,rows,plot_pdf)
+    1<=length(rows)<=3 || error("EGA3 library chart requires 1–3 validated cases")
     all(row["dimension"]=="3" && row["horizon"]=="1024" for row in rows) ||
         error("EGA3 library chart received a different grid")
     names=Dict("garamon_packed"=>"Garamon.jl", "gal"=>"GAL", "versor"=>"Versor")
+    all(haskey(names,row["library"]) for row in rows) || error("unknown EGA3 library")
+    length(unique(row["library"] for row in rows))==length(rows) ||
+        error("duplicate EGA3 library")
     labels=[names[row["library"]] for row in rows]
     medians=[parse(Float64,row["median_ns"])/1e3 for row in rows]
     noise=xkcd.scale(xkcd.opensimplex2_2d(seed=UInt64(20260929)),3e0)*0.2+
@@ -66,14 +84,14 @@ function _render_bench_plot_loaded(xkcd,summary_csv,plot_pdf)
     xkcd.with_theme(style) do
         figure=xkcd.Figure(size=(800,460),backgroundcolor=:white)
         axis=xkcd.Axis(figure[1,1],
-            title="EGA3 : produit de 1 024 paires de vecteurs",
+            title="EGA3 : 1 024 produits ("*string(length(rows))*"/3 voies validées)",
             xlabel="Temps median par lot (microsecondes)",
-            yticks=(1:3,labels),ygridvisible=false,xgridvisible=true)
-        xkcd.barplot!(axis,1:3,medians;direction=:x,
-            color=[:steelblue3,:darkorange2,:seagreen3],
+            yticks=(1:length(rows),labels),ygridvisible=false,xgridvisible=true)
+        xkcd.barplot!(axis,1:length(rows),medians;direction=:x,
+            color=[:steelblue3,:darkorange2,:seagreen3][1:length(rows)],
             strokecolor=:black,strokewidth=1)
         xkcd.xlims!(axis,0,maximum(medians)*1.27)
-        xkcd.ylims!(axis,0.5,3.5)
+        xkcd.ylims!(axis,0.5,length(rows)+0.5)
         for (index,value) in enumerate(medians)
             xkcd.text!(axis,value+maximum(medians)*0.02,index;
                 text=string(round(value;digits=2)),align=(:left,:center),fontsize=20)
@@ -84,7 +102,7 @@ function _render_bench_plot_loaded(xkcd,summary_csv,plot_pdf)
     plot_pdf
 end
 
-function _render_bench_plot(summary_csv,plot_pdf)
+function _render_bench_plot(rows::AbstractVector,plot_pdf)
     mkpath(dirname(plot_pdf))
     @eval import CairoMakie
     cairo=Base.invokelatest(getfield,@__MODULE__,:CairoMakie)
@@ -92,11 +110,14 @@ function _render_bench_plot(summary_csv,plot_pdf)
     @eval import XKCDMakie
     xkcd=Base.invokelatest(getfield,@__MODULE__,:XKCDMakie)
     try
-        Base.invokelatest(_render_bench_plot_loaded,xkcd,summary_csv,plot_pdf)
+        Base.invokelatest(_render_bench_plot_loaded,xkcd,rows,plot_pdf)
     finally
         Base.invokelatest(cairo.Makie.set_theme!,previous)
     end
 end
+
+_render_bench_plot(summary_csv::AbstractString,plot_pdf)=
+    _render_bench_plot(_report_rows(summary_csv),plot_pdf)
 
 function _compile_bench_article(tex_source,plot_dir,paper_dir)
     compiler=Sys.which("latexmk")

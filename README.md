@@ -16,8 +16,11 @@ produit géométrique de deux vecteurs EGA3 sur Garamon.jl, GAL et Versor.
 Les bibliothèques C++ sont téléchargées à leurs révisions fixées et compilées
 à la demande avec l'outillage fourni par les dépendances Julia ; aucun clone
 manuel n'est nécessaire. Après validation des trois mesures, le même appel
-écrit un CSV de synthèse, dessine un PDF vectoriel avec XKCDMakie/CairoMakie,
-puis compile l'article LaTeX avec `latexmk`. Cette dernière étape demande
+écrit un CSV de synthèse, dessine des PDF vectoriels avec XKCDMakie/CairoMakie,
+puis compile l'article LaTeX avec `latexmk`. Les 14 figures chiffrées déjà
+présentes dans l'article sont également régénérées avec XKCDMakie à partir
+des valeurs exploratoires explicitement fixées dans sa source ; cela ne crée
+aucune nouvelle mesure. Cette dernière étape demande
 TeX Live et `latexmk` sur la machine de benchmark. Le dossier de données par défaut est
 `DrWatson.datadir("garamonbench", "external-ga-vectors", "exploratory")`.
 La sortie affiche les chemins absolus. La structure DrWatson est :
@@ -28,9 +31,10 @@ data/garamonbench/external-ga-vectors/<condition>/
     benchmark/cases/<ID>/samples.csv    échantillons bruts
     summary.csv                une ligne par bibliothèque
     report.toml                empreintes du CSV, de la figure et de l'article
-plots/garamonbench/external-ga-vectors/<condition>/<signature>/
-    ega3_vector_libraries.pdf  figure vectorielle
-papers/garamonbench/external-ga-vectors/<condition>/<signature>/
+plots/garamonbench/external-ga-vectors/<condition>/<signature>/<archive-id>/
+    exploratory_*.pdf         14 figures exploratoires vectorielles
+    ega3_vector_libraries.pdf  figure du benchmark EGA3, 1 à 3 voies validées
+papers/garamonbench/external-ga-vectors/<condition>/<signature>/<archive-id>/
     Garamon_article_recherche_2026-09-27.pdf
 ```
 
@@ -38,6 +42,26 @@ La source LaTeX distribuée se trouve dans `papers/` du dépôt. Chaque
 campagne conserve sa configuration, ses empreintes de sources et de machine,
 ses verdicts et ses échantillons bruts. Le PDF du graphique reste vectoriel ;
 le tracé manuscrit utilise une graine fixe, indépendante de la graine des calculs.
+`<archive-id>` dérive du chemin absolu de l'archive, afin que deux campagnes
+ayant la même configuration ne mélangent pas leurs figures partielles.
+Après chaque cas EGA3 validé, `bench()` actualise la figure et recompile le PDF
+de l'article ; son titre indique combien des trois voies sont disponibles.
+Cette mise à jour se fait dans un processus Julia séparé, terminé avant le
+cas suivant, pour ne pas garder Makie chargé dans le processus de mesure.
+Une reprise réutilise les cas terminés. La compilation finale réécrit la figure
+avec les trois voies et le CSV de synthèse audité.
+
+Les six autres cadres « Données à acquérir » de l'article concernent la
+comparaison packed isolée, la roulette paramétrique, HPO/SHAP, CPU/GPU,
+les voies structurelles et RAM-free. Ils sont remplacés automatiquement par
+une figure PDF de même nom dès qu'elle est fournie au répertoire de figures
+de la campagne (`article_cpppacked_isole.pdf`,
+`article_roulette_parametres.pdf`, `article_hpo_shap.pdf`,
+`article_parallele_gpu_isole.pdf`, `article_voies_structurelles.pdf`,
+`article_ramfree_budget.pdf`). **Le `bench()` actuel ne mesure pas ces six
+expériences et ne produit donc pas leurs figures.** Elles restent visibles
+comme emplacements vides jusqu'à ce que les campagnes correspondantes
+fournissent des résultats qualifiés ; aucun temps n'est simulé.
 
 Après une interruption, relancer **exactement** `bench()` dans le même projet,
 sur la même machine et avec les mêmes sources. Les cas terminés et validés sont

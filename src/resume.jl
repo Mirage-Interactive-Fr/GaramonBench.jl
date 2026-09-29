@@ -334,7 +334,7 @@ end
 audit_resumable_archive(path::AbstractString,output)=
     audit_resumable_archive(load_config(path),output)
 
-function run_resumable_campaign(config;output)
+function run_resumable_campaign(config;output,on_progress=nothing)
     cases=expand_cases(config)
     backend=get(config["campaign"],"backend","")
     backend in ("perfchecker","benchmarktools","oracle_preflight") ||
@@ -352,6 +352,7 @@ function run_resumable_campaign(config;output)
         _resume_write(joinpath(output,"progress.toml"),
             Dict("status"=>"running","completed_ids"=>completed,
                 "pending_ids"=>setdiff(case_id.(cases),completed)))
+        isnothing(on_progress) || on_progress(output,completed,length(cases))
         try
             for case in cases
                 id=case_id(case)
@@ -396,6 +397,7 @@ function run_resumable_campaign(config;output)
                 _resume_write(joinpath(output,"progress.toml"),
                     Dict("status"=>"running","completed_ids"=>completed,
                         "pending_ids"=>setdiff(case_id.(cases),completed)))
+                isnothing(on_progress) || on_progress(output,completed,length(cases))
             end
             manifest["status"]="complete"
             manifest["completed_utc"]=string(now(UTC))

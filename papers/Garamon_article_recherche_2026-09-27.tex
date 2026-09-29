@@ -20,7 +20,13 @@
 \newcommand{\Cl}{\mathrm{Cl}}
 \newcommand{\supp}{\operatorname{supp}}
 \newcommand{\code}[1]{\texttt{#1}}
-\newcommand{\figureattente}[4]{%
+\newcommand{\figureattente}[5]{%
+\IfFileExists{#5}{%
+\begin{figure}[ht]
+\centering\includegraphics[width=.92\linewidth]{#5}
+\caption{#3}\label{#4}
+\end{figure}%
+}{%
 \begin{figure}[ht]
 \centering
 \fbox{\begin{minipage}[c][30mm][c]{.84\linewidth}
@@ -29,7 +35,7 @@
 \end{minipage}}
 \caption{#3 Aucun point ni classement n'est représenté dans cette version.}
 \label{#4}
-\end{figure}}
+\end{figure}}}
 
 \title{Calcul exact adaptatif dans Garamon.jl :\\
 audit du générateur C++ et premières évaluations}
@@ -357,6 +363,9 @@ et ne représentent pas le dispatch C++ amont par grades.
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_cpppacked.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_cpppacked.pdf}
+}{
 \begin{tikzpicture}
 \begin{axis}[
   width=.91\linewidth,height=6.2cm,
@@ -377,6 +386,7 @@ et ne représentent pas le dispatch C++ amont par grades.
 \legend{Julia JIT,Julia précompilée,C++ packed}
 \end{axis}
 \end{tikzpicture}
+}
 \caption{Médianes chaudes pour quatre lots de 10\,000 produits, dans un même
 contrat packed et via le même frontend. « Précompilée » signifie
 \code{Base.precompile} dans le processus. Cette première passe était
@@ -399,7 +409,7 @@ ne sont pas soustraits aux temps du frontend pour fabriquer un « coût FFI ».
 {Abscisse : dimension, famille de supports et horizon ; ordonnée : temps
 d'épisode apparié, avec préparation et première compilation séparées.}
 {Rejeu du même noyau sur la machine dédiée, après les mesures exploratoires
-de la figure~\ref{fig:cpppacked}.}{fig:cpppacked-isole}
+de la figure~\ref{fig:cpppacked}.}{fig:cpppacked-isole}{article_cpppacked_isole.pdf}
 Dans la voie \code{Mvec} auditée, l'insertion de certains vecteurs Eigen
 temporaires se fait par copie. Une expérience \emph{C++ contre C++}
 indépendante a maintenant mesuré le déplacement de ces temporaires
@@ -465,6 +475,9 @@ l'absence d'alias avec les opérandes. Le domaine démontré est
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_cppmovealloc.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_cppmovealloc.pdf}
+}{
 \begin{tikzpicture}
 \begin{axis}[
   width=.84\linewidth,height=5.8cm,
@@ -483,6 +496,7 @@ l'absence d'alias avec les opérandes. Le domaine démontré est
 \legend{C++ amont,C++ avec déplacements}
 \end{axis}
 \end{tikzpicture}
+}
 \caption{Appels \code{malloc} des buffers Eigen pour 10\,000 produits :
 deux ordres et trois répétitions donnent les mêmes comptes. Les
 allocations de nœuds \code{new} restent inchangées ; les appels
@@ -769,6 +783,9 @@ cette révision des sources, la dimension 65 passait de \code{UInt64} à
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_sorties.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_sorties.pdf}
+}{
 \begin{tikzpicture}
 \begin{axis}[
   width=.78\linewidth,height=5.6cm,
@@ -784,6 +801,7 @@ cette révision des sources, la dimension 65 passait de \code{UInt64} à
 \legend{Récursion,\code{join3}}
 \end{axis}
 \end{tikzpicture}
+}
 \caption{En 256D dispersée, le nombre de sorties inverse le classement des
 deux chemins Julia. Deux des quatre sorties sont nulles par structure dans
 cette famille. Temps exploratoires du balayage initial, même révision à masques
@@ -838,6 +856,9 @@ le plan.}
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_tripleamort.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_tripleamort.pdf}
+}{
 \begin{tikzpicture}
 \begin{loglogaxis}[
   width=.82\linewidth,height=6.0cm,
@@ -857,6 +878,7 @@ le plan.}
 \legend{Égalité,Une sortie,Quatre sorties}
 \end{loglogaxis}
 \end{tikzpicture}
+}
 \caption{Amortissement du plan ternaire sur le corpus TripleJoin :
 médiane des ratios par dimension, préparation comprise. Sous la ligne 1,
 le plan est plus rapide. Les segments guident l'œil entre les trois horizons
@@ -948,6 +970,9 @@ ont un contrat de sortie différent et ne sont pas assimilées aux multivecteurs
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_workspaceamort.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_workspaceamort.pdf}
+}{
 \begin{tikzpicture}
 \begin{semilogyaxis}[
  width=.82\linewidth,height=5.7cm,
@@ -967,6 +992,7 @@ ont un contrat de sortie différent et ne sont pas assimilées aux multivecteurs
 \legend{Direct total,Workspace total}
 \end{semilogyaxis}
 \end{tikzpicture}
+}
 \caption{Coût total de deux stratégies avec le même contrat de sortie :
 le workspace inclut sa préparation une fois par trace. En 2D le coût
 initial domine ; dès 4D et 32 appels sur cette famille, il est amorti.
@@ -1034,6 +1060,9 @@ masque, les allocations et les conversions. Les anciennes campagnes en
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_masques.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_masques.pdf}
+}{
 \begin{tikzpicture}
 \begin{semilogyaxis}[
  width=.84\linewidth,height=5.7cm,
@@ -1053,6 +1082,7 @@ masque, les allocations et les conversions. Les anciennes campagnes en
 \legend{\code{BigInt},\code{UInt128}}
 \end{semilogyaxis}
 \end{tikzpicture}
+}
 \caption{Deux sorties du \emph{même noyau diagonal ciblé}, comparées à
 chaque dimension dans un processus apparié. L'échelle est logarithmique ;
 préparation des supports et compilation sont exclues. Ces résultats
@@ -1331,7 +1361,7 @@ contrat de comparaison que la sortie finale.
 {Abscisse : probabilité $p$ et horizon ; ordonnées : coût total, erreur,
 variance et queue d'erreur face au témoin exact.}
 {Étude paramétrique de la roulette au-delà du seul point $p=1/2$ du
-tableau~\ref{tab:pruning}.}{fig:roulette-parametres}
+tableau~\ref{tab:pruning}.}{fig:roulette-parametres}{article_roulette_parametres.pdf}
 \FloatBarrier
 
 \subsection{Sélecteur contextuel et réglage des hyperparamètres}
@@ -1400,7 +1430,7 @@ n'est pas une politique exécutable gratuitement.
 {Panneaux prévus : regret sur familles tenues à l'écart, coût du sélecteur,
 sensibilité aux paramètres et attribution SHAP du modèle retenu.}
 {Évaluation après acquisition de groupes d'apprentissage indépendants
-et campagne isolée.}{fig:hpo-shap}
+et campagne isolée.}{fig:hpo-shap}{article_hpo_shap.pdf}
 
 \subsection{Threads, processus, lots compacts et GPU}
 \paragraph{Pourquoi cette technique ?}
@@ -1450,7 +1480,7 @@ classement de vitesse ; dimensions, signatures et horizons doivent encore
 {Abscisse : taille du lot et nombre de threads, processus ou blocs GPU ;
 ordonnées : temps complet, temps noyau, transferts, RSS et VRAM.}
 {Comparaison isolée des contrats CPU et GPU, avec résultats possédés
-identiques et transferts explicitement comptés.}{fig:parallele-gpu-isole}
+identiques et transferts explicitement comptés.}{fig:parallele-gpu-isole}{article_parallele_gpu_isole.pdf}
 
 \section{Techniques structurelles : pourquoi les tester ?}
 \label{sec:transpositions}
@@ -1583,6 +1613,9 @@ pas ici un démarrage de processus isolé.
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_n01horizon.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_n01horizon.pdf}
+}{
 \begin{tikzpicture}
 \begin{axis}[
  width=.77\linewidth,height=5.6cm,
@@ -1601,6 +1634,7 @@ pas ici un démarrage de processus isolé.
 \legend{Passage 1,Ordre inverse}
 \end{axis}
 \end{tikzpicture}
+}
 \caption{N01 comparé au \emph{même plan préparé} sur le coût total
 directement observé, construction et sorties conservées comprises.
 À $H=32$, 23 configurations gagnent dans les deux passages. Les
@@ -1753,6 +1787,9 @@ et tests de cette branche.
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_n03screen.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_n03screen.pdf}
+}{
 \begin{tikzpicture}
 \begin{axis}[
  width=.82\linewidth,height=5.6cm,
@@ -1774,6 +1811,7 @@ et tests de cette branche.
 \legend{Radical,Régulier,Sensible ou égalité}
 \end{axis}
 \end{tikzpicture}
+}
 \caption{Écran N03 : 378 configurations appariées entre deux ordres.
 La couleur désigne la méthode dont la médiane d'épisode est plus petite
 dans \emph{les deux} ordres. Les 38 autres configurations changent de
@@ -1879,6 +1917,9 @@ voies sont définies dans le texte.}
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_n04smoke.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_n04smoke.pdf}
+}{
 \begin{tikzpicture}
 \begin{semilogyaxis}[
  width=.91\linewidth,height=6.1cm,
@@ -1903,6 +1944,7 @@ voies sont définies dans le texte.}
 \legend{Linéaire,Binaire,DAG,Certifier chaque fois,Certifier puis réemployer}
 \end{semilogyaxis}
 \end{tikzpicture}
+}
 \caption{Les cinq routes N04 sur chaque fixture du
 tableau~\ref{tab:n04smoke}. L'échelle logarithmique sert à voir ensemble
 les épisodes courts et longs ; seules les routes d'un \emph{même} cas
@@ -2013,6 +2055,9 @@ des longueurs et horizons distincts : la comparaison a un sens
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_n05temps.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_n05temps.pdf}
+}{
 \begin{tikzpicture}
 \begin{semilogyaxis}[
  width=.86\linewidth,height=5.8cm,
@@ -2034,6 +2079,7 @@ des longueurs et horizons distincts : la comparaison a un sens
 \legend{Complet,Récursif scalaire,Contractions + Pfaffien}
 \end{semilogyaxis}
 \end{tikzpicture}
+}
 \caption{Épisodes chauds du smoke N05 : longueurs de chaînes
 $4,8,6,4$ et horizons $1,32,1,32$ dans l'ordre des groupes.
 L'échelle est logarithmique. La barre récursive manque en 4D générale
@@ -2085,6 +2131,9 @@ rationnel, avec une tolérance \code{Float64} déclarée.
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_k3partage.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_k3partage.pdf}
+}{
 \begin{tikzpicture}
 \begin{semilogyaxis}[
  width=.86\linewidth,height=5.8cm,
@@ -2106,6 +2155,7 @@ rationnel, avec une tolérance \code{Float64} déclarée.
 \legend{Indépendant,Workspace partagé,Cache vérifié}
 \end{semilogyaxis}
 \end{tikzpicture}
+}
 \caption{Coût total chaud de K3, préparation et sortie possédée
 comprises, sur une échelle logarithmique. A : 4D, quatre chaînes,
 $H=32$, coordonnées changeantes ; B : 65D, quatre chaînes, $H=32$,
@@ -2401,7 +2451,7 @@ ne démontre aucun gain composé.
 certification, temps total, mémoire maximale et taux de refus.}
 {Synthèse prévue des pistes sans résultat de vitesse qualifié ; chaque
 comparaison devra partager la même sortie et son oracle.}
-{fig:voies-structurelles}
+{fig:voies-structurelles}{article_voies_structurelles.pdf}
 
 \section{Discussion et pistes expérimentales}
 Les méthodes ne forment pas une hiérarchie unique. Les travaux sur la
@@ -2621,6 +2671,9 @@ Les octets alloués sont identiques entre V et A.}
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_b1dimensions.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_b1dimensions.pdf}
+}{
 \begin{tikzpicture}
 \begin{axis}[
  width=.86\linewidth,height=5.3cm,
@@ -2641,6 +2694,7 @@ Les octets alloués sont identiques entre V et A.}
 \legend{Calcul chaud,Épisode complet}
 \end{axis}
 \end{tikzpicture}
+}
 \caption{Allocations B1 des deux voies, identiques sur chaque cas.
 La ligne pointillée sépare 64D et 65D, où la fixture passe de
 \code{UInt64} à \code{UInt128}. Les masques d'entrée restent
@@ -2711,6 +2765,9 @@ identiques entre V et A.}
 
 \begin{figure}[ht]
 \centering
+\IfFileExists{exploratory_b1gradealloc.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_b1gradealloc.pdf}
+}{
 \begin{tikzpicture}
 \begin{axis}[
  width=.86\linewidth,height=5.3cm,
@@ -2730,6 +2787,7 @@ identiques entre V et A.}
 \legend{Bas grades,Grades $n$ et $n-1$}
 \end{axis}
 \end{tikzpicture}
+}
 \caption{Allocations des épisodes complets B1 dans les deux lots.
 Les voies vérifiée et annotée ont les mêmes allocations à dimension
 et support fixés. Les lots ont été exécutés successivement sous
@@ -2811,6 +2869,9 @@ grades.}
 
 \begin{figure}[!b]
 \centering
+\IfFileExists{exploratory_b1horizons.pdf}{
+\includegraphics[width=.92\linewidth]{exploratory_b1horizons.pdf}
+}{
 \begin{tikzpicture}
 \begin{axis}[
  width=.86\linewidth,height=5.1cm,
@@ -2827,6 +2888,7 @@ grades.}
   (5,1.032) (6,-.061) (7,-2.443) (8,2.320)};
 \end{axis}
 \end{tikzpicture}
+}
 \caption{Écart relatif des médianes d'épisode à $H=1\,024$,
 $100(\mathrm{V}-\mathrm{A})/\mathrm{V}$ : une barre positive favorise
 l'annotation. Les écarts restent petits dans ce prévol sous Étendue3D ;
@@ -3053,7 +3115,9 @@ l'attribution SHAP attendent ces mesures isolées.
 \centering
 \includegraphics[width=.88\linewidth]{ega3_vector_libraries.pdf}
 \caption{Produit géométrique de 1\,024 paires de vecteurs en EGA3 : médianes
-chaudes de Garamon.jl, GAL et Versor. Les stratégies internes diffèrent ; les
+chaudes disponibles de Garamon.jl, GAL et Versor. Le titre du graphique
+indique combien de voies ont été validées ; une figure partielle est mise
+à jour pendant la campagne. Les stratégies internes diffèrent et les
 mesures sont décrites par leur condition dans l'archive DrWatson.}
 \label{fig:external-ga-vectors}
 \end{figure}
@@ -3062,7 +3126,7 @@ mesures sont décrites par leur condition dans l'archive DrWatson.}
 {Abscisse : Garamon.jl, GAL et Versor ; ordonnée : médiane chaude pour
 1\,024 produits de paires identiques, avec dispersion et condition de mesure.}
 {Le graphique vectoriel Makie remplacera cet emplacement après
-\code{bench()} sur la machine dédiée.}{fig:external-ga-vectors}
+\code{bench()} sur la machine dédiée.}{fig:external-ga-vectors}{ega3_vector_libraries.pdf}
 }
 
 \subsection{Mémoire de travail bornée : piste RAM-free}
@@ -3088,7 +3152,7 @@ n'est encore attribué à cette piste.
 par dimension et forme de sortie, avec refus de budget visibles.}
 {Comparaison de récursion directe, flux par blocs, recomputation et
 workspace lorsque les sorties sont mathématiquement identiques.}
-{fig:ramfree-budget}
+{fig:ramfree-budget}{article_ramfree_budget.pdf}
 
 \FloatBarrier
 \Needspace{28\baselineskip}

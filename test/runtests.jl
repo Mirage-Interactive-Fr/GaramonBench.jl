@@ -5,6 +5,20 @@ include("bounds_b1.jl")
 include("resume.jl")
 include("techniques.jl")
 
+@testset "article figures retain measured values and conditional slots" begin
+    source=joinpath(pkgdir(GaramonBench),"papers",
+        "Garamon_article_recherche_2026-09-27.tex")
+    blocks=GaramonBench._article_exploratory_blocks(source)
+    @test length(blocks)==14
+    @test blocks["cpppacked"][1][2]==[.566444,.138876,.362696,.741087]
+    @test blocks["n05temps"][2][1]==[1.0,2.0,4.0]
+    content=read(source,String)
+    @test all(occursin("exploratory_"*key*".pdf",content)
+        for key in keys(blocks))
+    @test occursin("article_ramfree_budget.pdf",content)
+    @test occursin("ega3_vector_libraries.pdf",content)
+end
+
 @testset "portable Garamon C++ source and toolchain" begin
     source=ensure_cpp_source()
     @test source==ensure_cpp_source()

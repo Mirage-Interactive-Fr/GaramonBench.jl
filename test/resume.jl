@@ -110,7 +110,13 @@ end
     GaramonBench.register_smoke_adapter!()
     mktempdir() do root
         output=joinpath(root,"native")
-        @test run_resumable_campaign(config;output)==output
+        updates=Tuple{Int,Int}[]
+        callback=(archive,ids,total)->begin
+            @test archive==output
+            push!(updates,(length(ids),total))
+        end
+        @test run_resumable_campaign(config;output,on_progress=callback)==output
+        @test updates==[(0,2),(1,2),(2,2)]
         @test resumable_status(config,output)["status"]=="complete"
         cases=expand_cases(config)
         for case in cases

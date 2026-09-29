@@ -1,3 +1,31 @@
+function _external_article_dirs(archive::AbstractString,condition::AbstractString)
+    signature=TOML.parsefile(joinpath(archive,"campaign.toml"))["run_signature"]
+    archive_id=first(bytes2hex(sha256(abspath(archive))),12)
+    figure_dir=DrWatson.plotsdir("garamonbench","external-ga-vectors",
+        condition,first(signature,12),archive_id)
+    paper_dir=DrWatson.papersdir("garamonbench","external-ga-vectors",
+        condition,first(signature,12),archive_id)
+    figure_dir,paper_dir,signature
+end
+
+function _refresh_external_article(archive::AbstractString,condition::AbstractString)
+    root=dirname(@__DIR__)
+    benchmark=load_config(joinpath(root,"config","external_ga_vector_bench.toml"))
+    benchmark["campaign"]["condition"]=condition
+    figure_dir,paper_dir,_=_external_article_dirs(archive,condition)
+    source=joinpath(root,"papers","Garamon_article_recherche_2026-09-27.tex")
+    all(isfile(joinpath(figure_dir,"exploratory_"*key*".pdf")) &&
+        mtime(joinpath(figure_dir,"exploratory_"*key*".pdf"))>=mtime(source)
+        for key in keys(EXPLORATORY_FIGURES)) ||
+        render_exploratory_figures(source,figure_dir)
+    rows=_bench_completed_rows(benchmark,archive)
+    isempty(rows) || _render_bench_plot(rows,
+        joinpath(figure_dir,"ega3_vector_libraries.pdf"))
+    pdf=_compile_bench_article(source,figure_dir,paper_dir)
+    println("Article actualisé : ",length(rows),"/3 voies ; ",pdf)
+    pdf
+end
+
 """Run and resume the small EGA3 library comparison under DrWatson's data directory.
 
 Use `bench(; isolated=true)` only when the caller has actually reserved the
@@ -23,20 +51,32 @@ function bench(; output::Union{Nothing,AbstractString}=nothing, isolated::Bool=f
         output=joinpath(destination, "preflight"))
     resumable_status(preflight, preflight_output)["status"] == "complete" ||
         error("external GA preflight incomplete")
+    condition=isolated ? "isolated" : "exploratory"
+    article_source=joinpath(root,"papers","Garamon_article_recherche_2026-09-27.tex")
+    function on_progress(archive,completed,total)
+        isempty(completed) && return
+        try
+            julia=joinpath(Sys.BINDIR,Base.julia_exename())
+            code="using GaramonBench; GaramonBench._refresh_external_article(ARGS[1],ARGS[2])"
+            run(`$julia --startup-file=no --threads=1 --project=$root -e $code $archive $condition`)
+        catch exception
+            @warn "Article update failed; validated benchmark cases remain resumable" exception
+        end
+    end
     benchmark_output = run_resumable_campaign(benchmark;
-        output=joinpath(destination, "benchmark"))
+        output=joinpath(destination, "benchmark"),on_progress)
     resumable_status(benchmark, benchmark_output)["status"] == "complete" ||
         error("external GA benchmark incomplete")
 
     summary_csv,rows=_bench_summary(benchmark,benchmark_output,destination)
     medians=Dict(row.library=>row.median_ns for row in rows)
-    signature=TOML.parsefile(joinpath(benchmark_output,"campaign.toml"))["run_signature"]
-    condition=isolated ? "isolated" : "exploratory"
-    figure_dir=DrWatson.plotsdir("garamonbench","external-ga-vectors",condition,first(signature,12))
-    paper_dir=DrWatson.papersdir("garamonbench","external-ga-vectors",condition,first(signature,12))
+    figure_dir,paper_dir,signature=_external_article_dirs(benchmark_output,condition)
+    all(isfile(joinpath(figure_dir,"exploratory_"*key*".pdf")) &&
+        mtime(joinpath(figure_dir,"exploratory_"*key*".pdf"))>=mtime(article_source)
+        for key in keys(EXPLORATORY_FIGURES)) ||
+        render_exploratory_figures(article_source,figure_dir)
     figure_pdf=_render_bench_plot(summary_csv,
         joinpath(figure_dir,"ega3_vector_libraries.pdf"))
-    article_source=joinpath(root,"papers","Garamon_article_recherche_2026-09-27.tex")
     article_pdf=_compile_bench_article(article_source,figure_dir,paper_dir)
     _resume_write(joinpath(destination,"report.toml"),
         Dict("summary_csv"=>summary_csv,"summary_sha256"=>_resume_sha(summary_csv),
