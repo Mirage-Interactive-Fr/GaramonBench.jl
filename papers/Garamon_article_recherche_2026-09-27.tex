@@ -20,6 +20,16 @@
 \newcommand{\Cl}{\mathrm{Cl}}
 \newcommand{\supp}{\operatorname{supp}}
 \newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\figureattente}[4]{%
+\begin{figure}[ht]
+\centering
+\fbox{\begin{minipage}[c][30mm][c]{.84\linewidth}
+\centering\small\textbf{#1}\\[4pt]
+\emph{Données à acquérir}\\[3pt]#2
+\end{minipage}}
+\caption{#3 Aucun point ni classement n'est représenté dans cette version.}
+\label{#4}
+\end{figure}}
 
 \title{Calcul exact adaptatif dans Garamon.jl :\\
 audit du générateur C++ et premières évaluations}
@@ -85,6 +95,13 @@ transpositions encore expérimentales, les mesures obtenues et ce qu'elles
 ne démontrent pas. Les références scientifiques expliquent l'origine des
 idées ; chaque chiffre rapporté est défini ici par son scénario et son
 contrat, sans supposer la lecture d'un document de travail annexe.
+
+Les graphiques chiffrés de cette version sont des mesures exploratoires
+et leurs légendes précisent les conditions de recueil. Les cadres marqués
+« Données à acquérir » réservent la place des comparaisons encore ouvertes :
+ils ne contiennent ni points simulés ni performance présumée. Le graphique
+des bibliothèques GA sera inséré automatiquement quand la campagne
+DrWatson aura produit son PDF vectoriel.
 
 \section{Travaux antérieurs}
 Le générateur Garamon combine calculs préétablis et parcours récursif sur un
@@ -378,6 +395,11 @@ figure~\ref{fig:cpppacked}. Son stockage par grades, son dispatch et ses
 allocations diffèrent ; aucun ratio C++/Julia n'est déduit de ces nombres.
 L'exécutable C++ natif décompose encore le noyau packed, mais ses temps
 ne sont pas soustraits aux temps du frontend pour fabriquer un « coût FFI ».
+\figureattente{Comparaison packed isolée, C++ / Julia}
+{Abscisse : dimension, famille de supports et horizon ; ordonnée : temps
+d'épisode apparié, avec préparation et première compilation séparées.}
+{Rejeu du même noyau sur la machine dédiée, après les mesures exploratoires
+de la figure~\ref{fig:cpppacked}.}{fig:cpppacked-isole}
 Dans la voie \code{Mvec} auditée, l'insertion de certains vecteurs Eigen
 temporaires se fait par copie. Une expérience \emph{C++ contre C++}
 indépendante a maintenant mesuré le déplacement de ces temporaires
@@ -1305,6 +1327,11 @@ mesurer correctement la queue. Aucun résultat ne démontre un gain du
 pruning sur \code{ProductWorkspace}, ni une voie exacte plus rapide. Les
 erreurs intermédiaires et le coût de reprise appartiennent au même
 contrat de comparaison que la sortie finale.
+\figureattente{Roulette : balayage de la probabilité de conservation}
+{Abscisse : probabilité $p$ et horizon ; ordonnées : coût total, erreur,
+variance et queue d'erreur face au témoin exact.}
+{Étude paramétrique de la roulette au-delà du seul point $p=1/2$ du
+tableau~\ref{tab:pruning}.}{fig:roulette-parametres}
 \FloatBarrier
 
 \subsection{Sélecteur contextuel et réglage des hyperparamètres}
@@ -1369,6 +1396,11 @@ configurations choisies sur validation. Le résultat à publier est le
 coût total, la mémoire et le regret face au meilleur candidat
 rétrospectif mesuré, avec refus et queue des pertes. L'oracle rétrospectif
 n'est pas une politique exécutable gratuitement.
+\figureattente{Sélection, HPO et explications}
+{Panneaux prévus : regret sur familles tenues à l'écart, coût du sélecteur,
+sensibilité aux paramètres et attribution SHAP du modèle retenu.}
+{Évaluation après acquisition de groupes d'apprentissage indépendants
+et campagne isolée.}{fig:hpo-shap}
 
 \subsection{Threads, processus, lots compacts et GPU}
 \paragraph{Pourquoi cette technique ?}
@@ -1414,6 +1446,11 @@ encadrent ces traces, mais ne mesurent pas le pic de VRAM. Le profilage
 instrumenté et les trois échantillons chauds par cas ne fondent aucun
 classement de vitesse ; dimensions, signatures et horizons doivent encore
 être étendus sur une machine dédiée.
+\figureattente{Parallélisme CPU et calcul GPU}
+{Abscisse : taille du lot et nombre de threads, processus ou blocs GPU ;
+ordonnées : temps complet, temps noyau, transferts, RSS et VRAM.}
+{Comparaison isolée des contrats CPU et GPU, avec résultats possédés
+identiques et transferts explicitement comptés.}{fig:parallele-gpu-isole}
 
 \section{Techniques structurelles : pourquoi les tester ?}
 \label{sec:transpositions}
@@ -2359,6 +2396,12 @@ public de Garamon n'est arrêté ici. Une matrice séparée inventorie
 46 familles et 1\,035 paires avec leurs conditions et tests
 proposés ; elle ne contient aucun temps nouveau et
 ne démontre aucun gain composé.
+\figureattente{Voies structurelles et compositions exactes}
+{Abscisse : famille de structure et taille active ; ordonnées : coût de
+certification, temps total, mémoire maximale et taux de refus.}
+{Synthèse prévue des pistes sans résultat de vitesse qualifié ; chaque
+comparaison devra partager la même sortie et son oracle.}
+{fig:voies-structurelles}
 
 \section{Discussion et pistes expérimentales}
 Les méthodes ne forment pas une hiérarchie unique. Les travaux sur la
@@ -3014,7 +3057,13 @@ chaudes de Garamon.jl, GAL et Versor. Les stratégies internes diffèrent ; les
 mesures sont décrites par leur condition dans l'archive DrWatson.}
 \label{fig:external-ga-vectors}
 \end{figure}
-}{}
+}{
+\figureattente{Bibliothèques GA : vecteurs EGA3}
+{Abscisse : Garamon.jl, GAL et Versor ; ordonnée : médiane chaude pour
+1\,024 produits de paires identiques, avec dispersion et condition de mesure.}
+{Le graphique vectoriel Makie remplacera cet emplacement après
+\code{bench()} sur la machine dédiée.}{fig:external-ga-vectors}
+}
 
 \subsection{Mémoire de travail bornée : piste RAM-free}
 Nous ajoutons au protocole une voie exacte à mémoire de travail réduite,
@@ -3034,6 +3083,12 @@ représentations exactes. Chaque contribution et chaque signe resteront
 contrôlés par oracle ; le pic RSS, les allocations, les défauts de page
 et le surcoût des recomputations seront mesurés. Aucun résultat de vitesse
 n'est encore attribué à cette piste.
+\figureattente{RAM-free : temps contre mémoire maximale}
+{Abscisse : pic de mémoire, incluant la sortie ; ordonnée : temps total,
+par dimension et forme de sortie, avec refus de budget visibles.}
+{Comparaison de récursion directe, flux par blocs, recomputation et
+workspace lorsque les sorties sont mathématiquement identiques.}
+{fig:ramfree-budget}
 
 \FloatBarrier
 \Needspace{28\baselineskip}
