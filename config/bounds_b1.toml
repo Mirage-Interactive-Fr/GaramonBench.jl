@@ -1,0 +1,23 @@
+schema_version = 1
+[campaign]
+profile = "smoke"
+condition = "exploratory_interference"
+interference_label = "Etendue3D"
+# screen defaults to 2,3,4,6,8,12,16,32,64,65,96,128; three metrics,
+# two support families and horizons 1,32,1024. Explicit subsets are allowed.
+
+[compiler]
+check_bounds = ["yes", "auto"] # Global "no" is refused; compare forced checks with normal checks.
+opt_levels = [2]       # 2 and/or 3.
+cpu_targets = ["native"] # "generic" and/or "native".
+
+[limits]
+samples = 7
+sample_seconds = 0.02
+job_seconds = 180
+total_seconds = 1200
+rss_bytes = 2147483648
+max_episode_bytes = 536870912
+scratch_bytes = 536870912
+archive_bytes = 268435456
+source_bytes = 67108864

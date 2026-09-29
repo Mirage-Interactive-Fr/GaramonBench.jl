@@ -1,0 +1,29 @@
+schema_version = 1
+
+[profiling]
+case_config = "generated_product_oracle_preflight.toml"
+worker_project = "../worker"
+collectors = ["benchmark", "profile_alloc", "wall_profile"]
+diagnostics = ["latency", "gc", "memory", "jet", "alloccheck"]
+type_stability = true
+allow_unavailable = true
+
+[select]
+dimension = 4
+signature = "mixed"
+strategy = "generated"
+horizon = 1
+
+[limits]
+threads = 1
+samples = 3
+profile_repetitions = 30
+profile_episode_repetitions = 32
+allocation_repetitions = 1
+job_seconds = 120
+total_seconds = 600
+rss_bytes = 2147483648
+scratch_bytes = 134217728
+archive_bytes = 268435456
+source_bytes = 67108864
+type_text_bytes = 65536

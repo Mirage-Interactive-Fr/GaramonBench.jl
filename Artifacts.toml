@@ -1,0 +1,55 @@
+[garamon_cpp]
+git-tree-sha1 = "61e7afb4c9355408505d11cb58fac319c6112498"
+lazy = true
+
+    [[garamon_cpp.download]]
+    url = "https://github.com/vincentnozick/garamon/archive/6267161e35be57873fa553f266ef04f2ba32d2e5.tar.gz"
+    sha256 = "a6692b424f1d6f576697d1c6e3513e79217f1f15825df30007e6c89d53ee2e3b"
+
+[ga_gatl]
+git-tree-sha1 = "2c7562f6562a733609bcaf6c1ead35feb97c7654"
+lazy = true
+
+    [[ga_gatl.download]]
+    url = "https://github.com/laffernandes/gatl/archive/1f487a70f9c0d29528b7edccf441092bdd2d34f0.tar.gz"
+    sha256 = "1c0f4282df75c1c34515237794f2ee820b84e5325498c9d180feb11288cbf41e"
+
+[ga_versor]
+git-tree-sha1 = "df16164e11f590456ac4614959e96aa3dd297ab9"
+lazy = true
+
+    [[ga_versor.download]]
+    url = "https://github.com/wolftype/versor/archive/8262fce98c99ea6d9f0984d2ac17cde9fe5d0519.tar.gz"
+    sha256 = "9686f28c36eee12a11e89c794148477c8c5bad590864cbeea654d746cd2e8e15"
+
+[ga_gal]
+git-tree-sha1 = "9e65586620deceb9d7bac0709530da4cb8b19957"
+lazy = true
+
+    [[ga_gal.download]]
+    url = "https://github.com/jeremyong/gal/archive/e859994aeb826acaf912b3efe5813582b0648291.tar.gz"
+    sha256 = "87f5f7fc40d00dca9fbe1077ecbd87a9a85509fcf049d7c4bfbd8f115dc2cd9f"
+
+[ga_klein]
+git-tree-sha1 = "ebca0c22b62e142ea19a4f4ef8e04b36f6a352c5"
+lazy = true
+
+    [[ga_klein.download]]
+    url = "https://github.com/jeremyong/klein/archive/21823fc90d191c68a4f31e0b233c58ea28ca3d5a.tar.gz"
+    sha256 = "fae4fa5a2cbaec3a1a8e0128ba900f98011948a6c864ce0def9fed9f695626e8"
+
+[ga_gafro]
+git-tree-sha1 = "b9c411572b0933fe925b2ce586c14e7f49f40afb"
+lazy = true
+
+    [[ga_gafro.download]]
+    url = "https://github.com/idiap/gafro/archive/5a8a5ec2cfd0d80b74017565f50824b9571a7e69.tar.gz"
+    sha256 = "0745ede5fd128b7ea7707fa46ce07e5387f7229279309602193eab110f6cf0ee"
+
+[ga_grassmann_jl]
+git-tree-sha1 = "04182cd7946a44d9b02a8706705e4c5255ce25a4"
+lazy = true
+
+    [[ga_grassmann_jl.download]]
+    url = "https://github.com/chakravala/Grassmann.jl/archive/4f79a7fdb2d569bf6c13751fad3c078b6c135283.tar.gz"
+    sha256 = "97300bfd9ae6db86710aa047cebf133b5dd2b0131c0b72747c494c53a40294c0"

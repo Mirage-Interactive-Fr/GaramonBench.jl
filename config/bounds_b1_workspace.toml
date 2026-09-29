@@ -1,0 +1,27 @@
+schema_version = 1
+
+[campaign]
+profile = "screen"
+condition = "exploratory_interference"
+interference_label = "Etendue3D"
+dimensions = [2, 8, 65, 128]
+families = ["low_grade", "high_grade"]
+signatures = ["positive"]
+horizons = [1, 32, 1024]
+routes = ["checked", "inbounds", "workspace"]
+
+[compiler]
+check_bounds = ["auto"]
+opt_levels = [2]
+cpu_targets = ["native"]
+
+[limits]
+samples = 7
+sample_seconds = 0.2
+job_seconds = 180
+total_seconds = 840
+rss_bytes = 2147483648
+max_episode_bytes = 536870912
+scratch_bytes = 536870912
+archive_bytes = 268435456
+source_bytes = 67108864

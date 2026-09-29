@@ -1,0 +1,19 @@
+schema_version = 1
+
+[campaign]
+name = "cpp-matched-declared-isolated-reverse"
+backend = "external_perfchecker"
+condition = "isolated"
+interference_label = ""
+seed = 0
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+cpp = {env = "GARAMON_CPP_ROOT", default = "artifact:garamon_cpp"}
+
+[external_cpp]
+smoke = false
+reverse = true
+
+[grid]
+adapter = ["external_cpp_matched"]

@@ -1,0 +1,32 @@
+schema_version = 1
+
+[campaign]
+condition = "exploratory_interference"
+interference_label = "correctness_only_other_desktop_processes_possible"
+backend = "oracle_preflight"
+seed = 20260928
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+
+[case_defaults]
+adapter = "garamon_radical_inverse"
+family = "diagonal_radical_inverse"
+oracle = "independent_Chevalley_word_Gauss_Jordan"
+output_contract = "owned_exact_rational_inverse"
+
+[grid]
+dimension = [4]
+radical_dimensions = [1]
+active_nonradical_coordinates = [2]
+metric_family = ["signed"]
+phase = [1]
+strategy = ["radical_series"]
+
+[limits]
+max_cases = 1
+case_seconds = 120
+controller_rss_bytes = 4294967296
+build_disk_bytes = 268435456
+source_snapshot_bytes = 67108864
+archive_bytes = 268435456

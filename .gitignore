@@ -1,0 +1,11 @@
+/data/
+/results/
+/plots/
+/papers/garamonbench/
+/build/
+*.so
+*.o
+*.a
+*.dll
+*.dylib
+*.exe

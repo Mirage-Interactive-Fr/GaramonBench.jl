@@ -1,0 +1,30 @@
+schema_version = 1
+
+[campaign]
+name = "external-ga-vector-ega3-preflight"
+backend = "oracle_preflight"
+condition = "exploratory_interference"
+interference_label = "correctness_only"
+seed = 20260929
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+
+[case_defaults]
+adapter = "external_ga_vector_product"
+family = "vectors"
+signature = "positive"
+output_contract = "owned_all_coefficients_masks_0_3_5_6"
+
+[grid]
+dimension = [3]
+horizon = [1024]
+strategy = ["garamon_packed", "gal", "versor"]
+
+[limits]
+max_cases = 3
+case_seconds = 240
+controller_rss_bytes = 4294967296
+build_disk_bytes = 268435456
+source_snapshot_bytes = 67108864
+archive_bytes = 268435456

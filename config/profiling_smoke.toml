@@ -1,0 +1,28 @@
+schema_version = 1
+
+[profiling]
+case_config = "julia_products.toml"
+worker_project = "../worker"
+collectors = ["benchmark", "profile", "profile_alloc"]
+diagnostics = ["latency", "gc", "memory"]
+type_stability = true
+allow_unavailable = false
+
+[select]
+dimension = 7
+strategy = "workspace"
+horizon = 32
+
+[limits]
+threads = 1
+samples = 7
+profile_repetitions = 100
+profile_episode_repetitions = 256
+allocation_repetitions = 1
+job_seconds = 90
+total_seconds = 300
+rss_bytes = 2147483648
+scratch_bytes = 134217728
+archive_bytes = 268435456
+source_bytes = 67108864
+type_text_bytes = 65536

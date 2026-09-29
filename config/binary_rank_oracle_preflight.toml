@@ -1,0 +1,30 @@
+schema_version = 1
+
+[campaign]
+condition = "exploratory_interference"
+interference_label = "correctness_only_other_desktop_processes_possible"
+backend = "oracle_preflight"
+seed = 20260928
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+
+[case_defaults]
+adapter = "garamon_binary_rank"
+family = "fixed_support_binary_rank"
+oracle = "independent_Int64_ambient_Clifford_word"
+output_contract = "owned_all_structural_coefficients"
+
+[grid]
+dimension = [65]
+signature = ["mixed"]
+strategy = ["rank", "direct"]
+horizon = [1]
+
+[limits]
+max_cases = 2
+case_seconds = 60
+controller_rss_bytes = 4294967296
+build_disk_bytes = 268435456
+source_snapshot_bytes = 67108864
+archive_bytes = 268435456

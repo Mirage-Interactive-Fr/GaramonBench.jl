@@ -1,0 +1,33 @@
+schema_version = 1
+
+[campaign]
+name = "julia-products-initial"
+backend = "perfchecker"
+condition = "exploratory_interference"
+interference_label = "Etendue3D"
+seed = 20260927
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+cpp = {env = "GARAMON_CPP_ROOT", default = "artifact:garamon_cpp"}
+
+[case_defaults]
+adapter = "garamon_julia"
+family = "vectors"
+oracle = "explicit_basis_inversions_Int64"
+output_contract = "owned_all_coefficients"
+
+[grid]
+dimension = [3, 7]
+strategy = ["direct", "workspace"]
+horizon = [1, 32]
+
+[limits]
+samples = 7
+sample_seconds = 0.05
+max_cases = 16
+case_seconds = 120
+controller_rss_bytes = 2147483648
+build_disk_bytes = 16777216
+source_snapshot_bytes = 67108864
+archive_bytes = 268435456

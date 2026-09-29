@@ -1,0 +1,29 @@
+schema_version = 1
+
+[profiling]
+case_config = "profiling_b1w_cases.toml"
+worker_project = "../worker"
+collectors = ["benchmark", "profile", "profile_alloc"]
+diagnostics = ["latency", "gc", "memory"]
+type_stability = true
+allow_unavailable = false
+
+[select]
+dimension = 8
+strategy = "workspace_native"
+phase = "episode"
+horizon = 1024
+
+[limits]
+threads = 1
+samples = 7
+profile_repetitions = 30
+profile_episode_repetitions = 64
+allocation_repetitions = 1
+job_seconds = 120
+total_seconds = 600
+rss_bytes = 2147483648
+scratch_bytes = 134217728
+archive_bytes = 268435456
+source_bytes = 67108864
+type_text_bytes = 65536

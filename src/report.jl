@@ -1,0 +1,123 @@
+function _bench_warm_times(sample_file)
+    lines=readlines(sample_file)
+    isempty(lines) && error("empty sample file: "*sample_file)
+    header=split(first(lines),',')
+    phase=findfirst(==("phase"),header)
+    time=findfirst(==("time_ns"),header)
+    (isnothing(phase) || isnothing(time)) && error("sample schema changed")
+    values=Float64[]
+    for line in lines[2:end]
+        fields=split(line,',')
+        length(fields)==length(header) || error("sample width changed")
+        fields[phase]=="warm" && push!(values,parse(Float64,fields[time]))
+    end
+    values
+end
+
+function _bench_summary(config,benchmark_output,destination)
+    rows=NamedTuple[]
+    for case in expand_cases(config)
+        sample_file=joinpath(benchmark_output,"cases",case_id(case),"samples.csv")
+        times=_bench_warm_times(sample_file)
+        length(times)==config["limits"]["samples"] ||
+            error("incomplete sample count for "*case["strategy"])
+        push!(rows,(case_id=case_id(case),library=case["strategy"],
+            dimension=case["dimension"],horizon=case["horizon"],seed=case["seed"],
+            condition=config["campaign"]["condition"],samples=length(times),
+            median_ns=median(times),q25_ns=quantile(times,0.25),
+            q75_ns=quantile(times,0.75),min_ns=minimum(times),max_ns=maximum(times)))
+    end
+    path=joinpath(destination,"summary.csv")
+    temporary=path*".tmp-"*string(uuid4())
+    try
+        write_csv(temporary,rows)
+        if isfile(path)
+            read(path)==read(temporary) || error("completed summary differs from raw samples")
+        else
+            mv(temporary,path)
+        end
+    finally
+        isfile(temporary) && rm(temporary)
+    end
+    path,rows
+end
+
+function _report_rows(path)
+    lines=readlines(path)
+    isempty(lines) && error("empty summary CSV")
+    header=split(first(lines),',')
+    required=("library","dimension","horizon","median_ns","condition")
+    all(in(header),required) || error("summary CSV schema changed")
+    [Dict(zip(header,split(line,','))) for line in lines[2:end]]
+end
+
+function _render_bench_plot_loaded(xkcd,summary_csv,plot_pdf)
+    rows=_report_rows(summary_csv)
+    length(rows)==3 || error("EGA3 library chart requires exactly three cases")
+    all(row["dimension"]=="3" && row["horizon"]=="1024" for row in rows) ||
+        error("EGA3 library chart received a different grid")
+    names=Dict("garamon_packed"=>"Garamon.jl", "gal"=>"GAL", "versor"=>"Versor")
+    labels=[names[row["library"]] for row in rows]
+    medians=[parse(Float64,row["median_ns"])/1e3 for row in rows]
+    noise=xkcd.scale(xkcd.opensimplex2_2d(seed=UInt64(20260929)),3e0)*0.2+
+        xkcd.scale(xkcd.opensimplex2_2d(seed=UInt64(20260930)),1e1)*0.4+
+        xkcd.scale(xkcd.opensimplex2_2d(seed=UInt64(20260931)),1e2)*0.8
+    style=xkcd.theme_xkcd(noise_generator=noise)
+    xkcd.with_theme(style) do
+        figure=xkcd.Figure(size=(800,460),backgroundcolor=:white)
+        axis=xkcd.Axis(figure[1,1],
+            title="EGA3 : produit de 1 024 paires de vecteurs",
+            xlabel="Temps median par lot (microsecondes)",
+            yticks=(1:3,labels),ygridvisible=false,xgridvisible=true)
+        xkcd.barplot!(axis,1:3,medians;direction=:x,
+            color=[:steelblue3,:darkorange2,:seagreen3],
+            strokecolor=:black,strokewidth=1)
+        xkcd.xlims!(axis,0,maximum(medians)*1.27)
+        xkcd.ylims!(axis,0.5,3.5)
+        for (index,value) in enumerate(medians)
+            xkcd.text!(axis,value+maximum(medians)*0.02,index;
+                text=string(round(value;digits=2)),align=(:left,:center),fontsize=20)
+        end
+        xkcd.save(plot_pdf,figure)
+    end
+    isfile(plot_pdf) && filesize(plot_pdf)>0 || error("Makie did not produce a PDF")
+    plot_pdf
+end
+
+function _render_bench_plot(summary_csv,plot_pdf)
+    mkpath(dirname(plot_pdf))
+    @eval import CairoMakie
+    cairo=Base.invokelatest(getfield,@__MODULE__,:CairoMakie)
+    previous=Base.invokelatest(cairo.Makie.current_default_theme)
+    @eval import XKCDMakie
+    xkcd=Base.invokelatest(getfield,@__MODULE__,:XKCDMakie)
+    try
+        Base.invokelatest(_render_bench_plot_loaded,xkcd,summary_csv,plot_pdf)
+    finally
+        Base.invokelatest(cairo.Makie.set_theme!,previous)
+    end
+end
+
+function _compile_bench_article(tex_source,plot_dir,paper_dir)
+    compiler=Sys.which("latexmk")
+    isnothing(compiler) && error("latexmk is required to compile the article after benchmarking")
+    isfile(tex_source) || error("Garamon article source is missing")
+    mkpath(paper_dir)
+    mktempdir() do auxiliary
+        texinputs=join((plot_dir,dirname(tex_source),get(ENV,"TEXINPUTS","")),':')*":"
+        command=`$compiler -pdf -silent -interaction=nonstopmode -halt-on-error -auxdir=$auxiliary -outdir=$paper_dir $tex_source`
+        logfile=joinpath(auxiliary,"latexmk.log")
+        open(logfile,"w") do io
+            try
+                run(pipeline(addenv(command,"TEXINPUTS"=>texinputs);
+                    stdout=io,stderr=io))
+            catch
+                lines=readlines(logfile)
+                error("LaTeX compilation failed: "*join(last(lines,min(25,length(lines))),"\n"))
+            end
+        end
+    end
+    pdf=joinpath(paper_dir,splitext(basename(tex_source))[1]*".pdf")
+    isfile(pdf) && filesize(pdf)>0 || error("LaTeX did not produce the article PDF")
+    pdf
+end

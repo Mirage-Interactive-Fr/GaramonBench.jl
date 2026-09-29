@@ -1,0 +1,26 @@
+schema_version = 1
+
+[campaign]
+name = "harness-smoke"
+backend = "perfchecker"
+condition = "exploratory_interference"
+interference_label = "Etendue3D"
+seed = 20260927
+
+[case_defaults]
+adapter = "harness_smoke"
+strategy = "square"
+family = "harness"
+
+[grid]
+length = [4, 16]
+
+[limits]
+samples = 3
+sample_seconds = 0.01
+max_cases = 4
+case_seconds = 120
+controller_rss_bytes = 2147483648
+build_disk_bytes = 16777216
+source_snapshot_bytes = 67108864
+archive_bytes = 268435456

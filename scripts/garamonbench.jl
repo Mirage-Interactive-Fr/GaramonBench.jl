@@ -1,0 +1,2 @@
+using GaramonBench
+GaramonBench.cli()

@@ -1,0 +1,22 @@
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
+Garamon = "dbf15181-0796-4f0c-80cc-db9023881340"
+GaramonBench = "898aa6b3-2c79-4d30-93dc-a3eb36738598"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+PerfChecker = "6309bf6b-a531-4b08-891e-8ee981e5c424"
+SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+
+[sources]
+Garamon = {rev = "1a4cb873a918d0ae0b05dbc151a142fc86ad6a7f", url = "https://github.com/Mirage-Interactive-Fr/Garamon.jl.git"}
+GaramonBench = {path = ".."}
+PerfChecker = {rev = "release/v1.0.0-rc1", url = "https://github.com/Mirage-Interactive-Fr/PerfChecker.jl.git"}
+
+[compat]
+BenchmarkTools = "1"
+DrWatson = "2.19"
+PerfChecker = "1"
+julia = "1.13"

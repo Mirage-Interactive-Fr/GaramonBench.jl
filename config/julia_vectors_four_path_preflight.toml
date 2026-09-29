@@ -1,0 +1,31 @@
+schema_version = 1
+
+[campaign]
+condition = "exploratory_interference"
+interference_label = "preflight_only_other_desktop_processes_possible"
+backend = "perfchecker"
+seed = 20260928
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+
+[case_defaults]
+adapter = "garamon_julia"
+family = "vectors"
+oracle = "explicit_basis_inversions_Int64"
+output_contract = "owned_all_coefficients"
+
+[grid]
+dimension = [3, 65]
+strategy = ["direct", "prepared", "workspace", "packed"]
+horizon = [1, 32]
+
+[limits]
+samples = 3
+sample_seconds = 0.05
+max_cases = 16
+case_seconds = 120
+controller_rss_bytes = 4294967296
+build_disk_bytes = 268435456
+source_snapshot_bytes = 67108864
+archive_bytes = 268435456

@@ -1,0 +1,31 @@
+schema_version = 1
+
+[campaign]
+condition = "exploratory_interference"
+interference_label = "preflight_only_other_desktop_processes_possible"
+backend = "perfchecker"
+seed = 0
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+cpp = {env = "GARAMON_CPP_ROOT", default = "artifact:garamon_cpp"}
+
+[case_defaults]
+adapter = "cpp_packed_exact"
+seed_policy = "deterministic_cm_value_formula_no_rng"
+
+[grid]
+dimension = [3, 7]
+family = ["mixed"]
+horizon = [32]
+strategy = ["julia_packed", "cpp_packed"]
+
+[limits]
+max_cases = 4
+samples = 3
+sample_seconds = 0.2
+case_seconds = 240
+controller_rss_bytes = 4294967296
+build_disk_bytes = 268435456
+source_snapshot_bytes = 67108864
+archive_bytes = 268435456

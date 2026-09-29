@@ -1,0 +1,522 @@
+schema_version = 1
+compatibility_matrix = "docs/technique_compatibility.md"
+meaning = "source/prototype/research inventory; no entry is benchmark-qualified by this file"
+
+[[technique]]
+id = "01"
+name = "dense-global"
+state = "implemented"
+source = "src/multivectors.jl"
+test = "test/runtests.jl"
+campaign = "julia-products"
+preflight_config = "config/dense_global_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_dense_global.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "dense", support = "broad", horizon = 1}
+
+[[technique]]
+id = "02"
+name = "sparse-supports"
+state = "implemented"
+source = "src/gradeblocks.jl"
+test = "test/runtests.jl"
+campaign = "julia-products"
+preflight_config = "config/julia_vectors_signature_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_julia.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "direct", horizon = 1}
+
+[[technique]]
+id = "03"
+name = "grade-blocks"
+state = "implemented"
+source = "src/gradeblocks.jl"
+test = "test/runtests.jl"
+campaign = "continuous-dimensions"
+preflight_config = "config/grade_product_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_grade_product.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", grade_pair = "one_one", operation = "wedge", strategy = "grade_plan", horizon = 1}
+
+[[technique]]
+id = "04"
+name = "targeted-recursion"
+state = "implemented"
+source = "src/dsl.jl"
+test = "test/runtests.jl"
+campaign = "continuous-dimensions"
+preflight_config = "config/triple_join_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_triple_join.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "recursive", horizon = 1}
+
+[[technique]]
+id = "05"
+name = "exact-grade-filter"
+state = "implemented"
+source = "src/products.jl"
+test = "test/products.jl"
+campaign = "continuous-dimensions"
+preflight_config = "config/target_coefficient_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_target_coefficient.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", operation = "left", strategy = "targeted", horizon = 1}
+
+[[technique]]
+id = "06"
+name = "xor-join"
+state = "implemented"
+source = "src/products.jl"
+test = "test/products.jl"
+campaign = "continuous-dimensions"
+preflight_config = "config/target_coefficient_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_target_coefficient.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", operation = "geometric", strategy = "targeted", horizon = 1}
+
+[[technique]]
+id = "07"
+name = "join-three"
+state = "implemented"
+source = "src/triplejoin.jl"
+test = "test/triplejoin.jl"
+campaign = "triplejoin"
+preflight_config = "config/triple_join_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_triple_join.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "join3", horizon = 1}
+
+[[technique]]
+id = "08"
+name = "prepared-plans"
+state = "implemented"
+source = "src/plans.jl"
+test = "test/products.jl"
+campaign = "julia-products"
+preflight_config = "config/julia_vectors_signature_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_julia.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "prepared", horizon = 1}
+
+[[technique]]
+id = "09"
+name = "workspaces"
+state = "implemented"
+source = "src/workspace.jl"
+test = "test/workspace.jl"
+campaign = "workspace-small"
+preflight_config = "config/julia_vectors_signature_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_julia.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "workspace", horizon = 1}
+
+[[technique]]
+id = "10"
+name = "lru-plan-cache"
+state = "implemented"
+source = "src/cache.jl"
+test = "test/runtests.jl"
+campaign = ""
+preflight_config = "config/plan_cache_tuning_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_plan_cache.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "lru", trace = "scan", horizon = 32, capacity_plans = 2, eviction_exponent = 1.0, draw_seed = 20260928}
+
+[[technique]]
+id = "11"
+name = "roulette-plan-eviction"
+state = "implemented"
+source = "src/cache.jl"
+test = "test/runtests.jl"
+campaign = ""
+preflight_config = "config/plan_cache_tuning_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_plan_cache.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "roulette", trace = "scan", horizon = 32, capacity_plans = 2, eviction_exponent = 1.0, draw_seed = 20260928}
+
+[[technique]]
+id = "12"
+name = "tinylfu-plan-admission"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "13"
+name = "sieve-plan-eviction"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "14"
+name = "jit-code-generation"
+state = "implemented"
+source = "src/generated.jl"
+test = "test/runtests.jl"
+campaign = ""
+preflight_config = "config/generated_product_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_generated_product.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "generated", horizon = 1}
+
+[[technique]]
+id = "15"
+name = "precompilation-catalogue"
+state = "prototype"
+source = "perf/precompile_lifecycle.jl"
+test = ""
+campaign = "precompile-lifecycle"
+preflight_test = "test/precompile_catalogue_oracle_preflight.jl"
+preflight_config = "config/precompile_catalogue_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_precompile_catalogue.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 3, scenario = "known", strategy = "generated"}
+
+[[technique]]
+id = "16"
+name = "dag-subexpression-sharing"
+state = "implemented"
+source = "src/dsl.jl"
+test = "test/runtests.jl"
+campaign = "long-horizon"
+preflight_config = "config/expression_dag_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_expression_dag.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 3, structure = "shared", strategy = "prepared_dag"}
+
+[[technique]]
+id = "17"
+name = "factorized-blades-versors"
+state = "implemented"
+source = "src/transformations.jl"
+test = "test/runtests.jl"
+campaign = ""
+preflight_config = "config/factorized_versor_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_factorized_versor.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, strategy = "two_reflections"}
+
+[[technique]]
+id = "18"
+name = "active-coordinate-subspace"
+state = "implemented"
+source = "src/subspace.jl"
+test = "test/runtests.jl"
+campaign = ""
+preflight_config = "config/coordinate_subspace_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_coordinate_subspace.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 65, operation = "geometric"}
+
+[[technique]]
+id = "19"
+name = "exact-tensor-train"
+state = "prototype"
+source = "src/trains.jl"
+test = "test/runtests.jl"
+campaign = ""
+preflight_config = "config/exact_tensor_train_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_exact_tensor_train.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, strategy = "bounded_exact_separable_product"}
+
+[[technique]]
+id = "20"
+name = "weighted-zdd"
+state = "prototype"
+source = "src/weighted_zdd.jl"
+test = "test/weighted_zdd.jl"
+campaign = ""
+preflight_config = "config/weighted_zdd_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_weighted_zdd.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "signed_degenerate", strategy = "weighted_zdd_product"}
+
+[[technique]]
+id = "21"
+name = "materialized-trie"
+state = "prototype"
+source = "src/materialized_trie.jl"
+test = ""
+campaign = ""
+preflight_test = "test/materialized_trie_oracle_preflight.jl"
+preflight_config = "config/materialized_trie_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_materialized_trie.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 6, operation = "wedge"}
+
+[[technique]]
+id = "22"
+name = "clifford-matrix-gfft"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "23"
+name = "egraph-rewriting"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "24"
+name = "deferred-exact-replay"
+state = "prototype"
+source = "perf/pruning_recurrences.jl"
+test = ""
+campaign = "pruning-recurrences"
+preflight_test = "test/deferred_exact_replay_oracle_preflight.jl"
+preflight_config = "config/deferred_exact_replay_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_deferred_exact_replay.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 2, signature = "positive", regime = "contracting", recurrence = "bilinear", horizon = 2, strategy = "deferred_and_replay"}
+
+[[technique]]
+id = "25"
+name = "approximate-pruning-roulette"
+state = "prototype"
+contract = "approximate"
+source = "perf/pruning_recurrences.jl"
+test = ""
+campaign = "pruning-recurrences"
+preflight_test = "test/approximate_roulette_oracle_preflight.jl"
+preflight_config = "config/approximate_roulette_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_approximate_roulette.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 2, signature = "indefinite", regime = "contracting", recurrence = "affine", horizon = 2, strategy = "roulette", survival_probability = "1/2", draw_seed = 20260928}
+
+[[technique]]
+id = "26"
+name = "analytic-triple-selector"
+state = "prototype"
+contract = "orchestration"
+source = "src/selector.jl"
+test = "test/selector.jl"
+campaign = "selector-compare"
+preflight_config = "config/exact_triple_selector_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_exact_triple_selector.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "auto", horizon = 1}
+
+[[technique]]
+id = "27"
+name = "cpu-threads-simd-batches"
+state = "implemented"
+source = "perf/cpu_threaded_packed.jl"
+test = "perf/cpu_threaded_packed_tests.jl"
+campaign = "parallel-batches"
+preflight_config = "config/cpu_threaded_packed_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_cpu_threaded_packed.jl"
+preflight_environment = "."
+preflight_threads = 4
+preflight_smoke = {dimension = 8, signature = "mixed", strategy = "threaded_resident", horizon = 32}
+
+[[technique]]
+id = "28"
+name = "cpu-processes"
+state = "prototype"
+source = "perf/parallel_batches.jl"
+test = ""
+campaign = "parallel-batches"
+preflight_test = "test/cpu_processes_oracle_preflight.jl"
+preflight_config = "config/cpu_processes_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_cpu_processes.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, strategy = "resident_process", batch = 4}
+
+[[technique]]
+id = "29"
+name = "gpu-kernels-transfers"
+state = "prototype"
+source = "perf/gpu_packed.jl"
+test = "perf/gpu_packed_tests.jl"
+campaign = ""
+preflight_config = "config/gpu_packed_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_gpu_packed.jl"
+preflight_environment = "gpu"
+preflight_smoke = {dimension = 8, family = "higher_rank", signature = "mixed", strategy = "gpu_host_owned", horizon = 1}
+
+[[technique]]
+id = "30"
+name = "blade-masks-combinatorial-index"
+state = "implemented"
+source = "src/indexing.jl"
+test = "test/runtests.jl"
+campaign = "binary-rank"
+preflight_config = "config/blade_index_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_blade_index.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 65, strategy = "indices", horizon = 1}
+
+[[technique]]
+id = "31"
+name = "binary-support-rank"
+state = "prototype"
+source = "perf/binary_rank.jl"
+test = "perf/binary_rank_tests.jl"
+campaign = "binary-rank"
+preflight_config = "config/binary_rank_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_binary_rank.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 65, signature = "mixed", strategy = "rank", horizon = 1}
+
+[[technique]]
+id = "32"
+name = "invariant-sectors"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "33"
+name = "radical-nilpotence"
+state = "prototype"
+source = "perf/n03_radical.jl"
+test = "perf/n03_tests.jl"
+campaign = ""
+preflight_config = "config/radical_inverse_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_radical_inverse.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, radical_dimensions = 1, active_nonradical_coordinates = 2, metric_family = "signed", phase = 1, strategy = "radical_series"}
+
+[[technique]]
+id = "34"
+name = "short-polynomial-identity"
+state = "prototype"
+source = "perf/n04_short_identity.jl"
+test = "perf/n04_short_identity_tests.jl"
+campaign = ""
+preflight_config = "config/scalar_square_certificate_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_scalar_square_certificate.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 3, exponent = 3, horizon = 1, metric_family = "general", shape = "simple_bivector", changes = "stable", strategy = "certify_each"}
+
+[[technique]]
+id = "35"
+name = "pfaffian-scalar-chain"
+state = "prototype"
+source = "perf/n05_pfaffian.jl"
+test = "perf/n05_tests.jl"
+campaign = "n05-pfaffian"
+preflight_config = "config/pfaffian_scalar_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_pfaffian_scalar.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 3, chain_length = 4, strategy = "pfaffian", horizon = 1}
+
+[[technique]]
+id = "36"
+name = "cross-gram-rank"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "37"
+name = "fermionic-gaussian-operators"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "38"
+name = "givens-basis-change"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "39"
+name = "signed-disjoint-convolution"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "40"
+name = "bilinear-kernel-synthesis"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "41"
+name = "verified-superoptimization"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "42"
+name = "wavefront-recursion"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "43"
+name = "adaptive-radix-tree"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "44"
+name = "multimodular-crt"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "45"
+name = "filtered-adaptive-precision"
+state = "research"
+source = ""
+test = ""
+campaign = ""
+
+[[technique]]
+id = "46"
+name = "propagated-structural-certificates"
+state = "research"
+contract = "orchestration"
+source = ""
+test = ""
+campaign = ""
+
+[[combination]]
+id = "K1"
+techniques = ["06", "08", "09", "31"]
+source = "perf/binary_rank_compact.jl"
+test = "perf/binary_rank_compact_tests.jl"
+campaign = "k1-binary-rank"
+preflight_config = "config/binary_rank_compact_workspace_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_binary_rank_compact_workspace.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 65, strategy = "compact_workspace", horizon = 2}
+
+[[combination]]
+id = "K3"
+techniques = ["09", "16", "35"]
+source = "perf/n05_shared_workspace.jl"
+test = "perf/n05_shared_tests.jl"
+campaign = ""
+preflight_config = "config/k3_shared_workspace_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_k3_shared_workspace.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 3, strategy = "shared_cached", horizon = 3}

@@ -1,0 +1,27 @@
+schema_version = 1
+
+[campaign]
+name = "b1w-profiling-preflight"
+backend = "perfchecker"
+condition = "exploratory_interference"
+interference_label = "Etendue3D"
+seed = 20260927
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+
+[case_defaults]
+adapter = "bounds_b1w"
+family = "low_grade"
+signature = "positive"
+oracle = "independent_ordered_word_Int64"
+output_contract = "owned_sparse_outputs"
+
+[grid]
+dimension = [8, 128]
+strategy = ["workspace_native", "workspace_native_singlepass"]
+phase = ["build", "hot", "episode"]
+horizon = [1024]
+
+[limits]
+max_cases = 12

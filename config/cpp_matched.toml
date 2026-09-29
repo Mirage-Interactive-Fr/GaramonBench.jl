@@ -1,0 +1,21 @@
+schema_version = 1
+
+[campaign]
+name = "cpp-matched-via-existing-perfchecker"
+backend = "external_perfchecker"
+condition = "exploratory_interference"
+interference_label = "Etendue3D"
+seed = 0
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+cpp = {env = "GARAMON_CPP_ROOT", default = "artifact:garamon_cpp"}
+
+[external_cpp]
+smoke = true
+reverse = false
+
+# The existing driver defines the exact fixed corpus. The orchestrator derives
+# and checks it: smoke = 4 cases; full = 64 cases. No fabricated grid overrides.
+[grid]
+adapter = ["external_cpp_matched"]

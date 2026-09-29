@@ -1,0 +1,31 @@
+schema_version = 1
+# Change id to any of the 13 entries in campaigns.toml.
+[recipe]
+id = "long-horizon"
+profile = "smoke"
+threads = 1
+condition = "exploratory_interference"
+interference_label = "Etendue3D"
+
+[limits]
+wall_seconds = 180
+rss_bytes = 4294967296
+scratch_bytes = 536870912
+archive_bytes = 268435456
+source_bytes = 67108864
+
+# Recipe-specific parameters only; unknown keys are refused.
+[parameters]
+# continuous-dimensions: max_dimension, dimensions, isolated_workers
+# parallel-batches: thread_counts, worker_counts (each <=4 when exploratory)
+# cpp-matched: reverse
+# n05-pfaffian: reverse; full is the bounded native slice, not the replay matrix.
+# With profile="full": shard_index + shard_count OR range_first + range_last.
+# Each N05 selection must contain <=32 cases. Complete replay: 1..1140 with count=1140, then audit.
+# binary-rank: mode = "smoke" | "screen" | "episode_screen" | "full"
+# episode_screen requires profile = "full"; it executes 648 cases, not a smoke.
+# k1-binary-rank: mode = "decision_smoke" | "decision_screen" | "shards".
+# Full defaults to shards and requires explicit dimensions = [2] (integers 2..128).
+# One fresh process per dimension; 324 cases each, full manifest and coverage audit.
+# Prefer one dimension per invocation; wall/scratch/archive budgets cover the whole recipe.
+# julia-products: native_config (optional path to an existing campaign config)

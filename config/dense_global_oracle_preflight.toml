@@ -1,0 +1,31 @@
+schema_version = 1
+
+[campaign]
+condition = "exploratory_interference"
+interference_label = "correctness_only_other_desktop_processes_possible"
+backend = "oracle_preflight"
+seed = 20260928
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+
+[case_defaults]
+adapter = "garamon_dense_global"
+family = "dense_global_storage"
+oracle = "independent_int64_clifford_words_all_masks"
+output_contract = "owned_float64_global_matrix"
+
+[grid]
+dimension = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+signature = ["positive", "mixed", "degenerate"]
+strategy = ["dense", "sparse"]
+support = ["basis", "broad"]
+horizon = [1, 32]
+
+[limits]
+max_cases = 264
+case_seconds = 120
+controller_rss_bytes = 4294967296
+build_disk_bytes = 268435456
+source_snapshot_bytes = 67108864
+archive_bytes = 536870912

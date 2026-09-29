@@ -1,0 +1,30 @@
+schema_version = 1
+
+[profiling]
+# Paths relative to this file. The case identity is resolved from the existing grid.
+case_config = "julia_products.toml"
+worker_project = "../worker"
+collectors = ["benchmark", "profile", "wall_profile", "profile_alloc"]
+diagnostics = ["latency", "gc", "memory", "heap", "jet", "alloccheck"]
+type_stability = true
+# Missing capabilities stay explicit in capture-results; they never receive a pass.
+allow_unavailable = true
+
+[select]
+dimension = 3
+strategy = "workspace"
+horizon = 32
+
+[limits]
+threads = 1
+samples = 7
+profile_repetitions = 1000
+profile_episode_repetitions = 256
+allocation_repetitions = 1
+job_seconds = 120
+total_seconds = 600
+rss_bytes = 2147483648
+scratch_bytes = 134217728
+archive_bytes = 268435456
+source_bytes = 67108864
+type_text_bytes = 65536

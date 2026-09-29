@@ -1,0 +1,88 @@
+schema_version = 1
+description = "Executable campaign inventory; placeholders are supplied paths, no old results imported."
+
+[[campaign]]
+id = "julia-products"
+availability = "packaged"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={bench}", "{bench}/scripts/garamonbench.jl", "run", "{bench}/config/julia_products.toml", "{output}", "{bench}/adapters/garamon_julia.jl"]
+coverage = "EGA 3/7, vectors, direct/workspace, actual horizons 1/32, independent exact oracle"
+
+[[campaign]]
+id = "cpp-matched"
+availability = "packaged_requires_exact_julia_target_and_upstream_cpp_checkout"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={bench}", "{bench}/scripts/garamonbench.jl", "cpp-matched", "{bench}/config/cpp_matched.toml", "{output}"]
+coverage = "default 4-feature smoke; set external_cpp.smoke=false for 64 matched/descriptive features"
+
+[[campaign]]
+id = "continuous-dimensions"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={julia}/perf/controller", "{julia}/perf/explore_dimensions.jl", "{output}/dimensions.csv", "256"]
+coverage = "bounded families over continuous dimensions; exactness and exclusions in original driver"
+
+[[campaign]]
+id = "workspace-small"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={julia}/perf/controller", "{julia}/perf/workspace_small.jl", "{output}/workspace-small.csv"]
+coverage = "dimensions 2..12, dense/grade2/sparse, direct/prepared/workspace/values, actual horizons"
+
+[[campaign]]
+id = "triplejoin"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={julia}/perf/controller", "{julia}/perf/triplejoin_compare.jl", "{output}/triplejoin"]
+coverage = "full versus requested outputs, preparation/workspace and resource admission"
+
+[[campaign]]
+id = "pruning-recurrences"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={julia}/perf/controller", "{julia}/perf/pruning_recurrences.jl", "{output}/pruning.csv"]
+coverage = "approximate threshold/roulette/residual/replay, exact oracle separate; never merge with exact strategies"
+
+[[campaign]]
+id = "precompile-lifecycle"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "{julia}/perf/precompile_lifecycle.jl", "{output}/precompile"]
+coverage = "process startup, loading, JIT and retained compilation configurations"
+
+[[campaign]]
+id = "parallel-batches"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "{julia}/perf/parallel_batches_grid.jl", "{output}/parallel"]
+coverage = "1/2/4/8/16 threads and 1/2/4/8 processes; GPU unimplemented"
+
+[[campaign]]
+id = "long-horizon"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={julia}/perf/controller", "{julia}/perf/long_horizon.jl", "{output}/long-horizon"]
+coverage = "actual changing-input horizons 1/32/1024/10000; high-dimensional requested coefficients"
+
+[[campaign]]
+id = "selector-compare"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={julia}/perf/controller", "{julia}/perf/selector_compare.jl", "--smoke", "{output}/selector"]
+coverage = "smoke six exact routes; full replay matrix 5184 identities; preparing identities is not measuring them; no learned selector inferred"
+
+[[campaign]]
+id = "binary-rank"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={julia}/perf/controller", "{julia}/perf/binary_rank_compare.jl", "--smoke", "{output}/rank"]
+coverage = "N01 rank compression prototype; native exact oracle; smoke/screen/episode_screen/full; episode_screen executes 648 cases in two orders with the entire episode measured; integration is not campaign validation"
+parameter_modes = ["smoke", "screen", "episode_screen", "full"]
+
+[[campaign]]
+id = "n05-pfaffian"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={julia}/perf/controller", "{julia}/perf/n05_compare.jl", "--smoke", "{output}/n05"]
+coverage = "N05 vector-chain scalar prototype; smoke 15 native cases; full without selection is a bounded 23-case slice; full plus shard/range selects at most 32 of 36480 stable identities; coordinate construction and preexisting contractions remain separate comparison groups; no run-recipe N05 campaign measured"
+profiles = ["smoke", "full"]
+parameters = ["reverse", "shard_index", "shard_count", "range_first", "range_last"]
+protocol_source = "perf/n05_protocol.toml"
+
+[[campaign]]
+id = "k1-binary-rank"
+availability = "external_target_perf_scripts_required_executable_via_run_recipe"
+argv = ["julia", "--startup-file=no", "--threads=1,0", "--project={julia}/perf/controller", "{julia}/perf/binary_rank_compact_compare.jl", "--decision_smoke", "{output}/k1"]
+coverage = "K1v2 four exact routes: prepared, original rank, compact rank, compact workspace; complete construction plus H owned products at H1/32/1024; smoke 12, paired screen 936, or explicit dimension shards 2..128 of 324 cases each; full manifest 41148; fresh process per dimension and global coverage audit; integration is not a measured recipe validation"
+profiles = ["smoke", "full"]
+parameters = ["mode", "dimensions"]
+parameter_modes = ["decision_smoke", "decision_screen", "shards"]
+audit_source = "perf/binary_rank_compact_audit.jl"

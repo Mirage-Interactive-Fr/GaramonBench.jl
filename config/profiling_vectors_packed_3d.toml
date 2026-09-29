@@ -1,0 +1,28 @@
+schema_version = 1
+
+[profiling]
+case_config = "julia_vectors_four_path_preflight.toml"
+worker_project = "../worker"
+collectors = ["benchmark", "profile", "wall_profile", "profile_alloc"]
+diagnostics = ["latency", "gc", "memory", "heap", "jet", "alloccheck"]
+type_stability = true
+allow_unavailable = true
+
+[select]
+dimension = 3
+strategy = "packed"
+horizon = 32
+
+[limits]
+threads = 1
+samples = 7
+profile_repetitions = 256
+profile_episode_repetitions = 2048
+allocation_repetitions = 1
+job_seconds = 120
+total_seconds = 600
+rss_bytes = 4294967296
+scratch_bytes = 2147483648
+archive_bytes = 1073741824
+source_bytes = 67108864
+type_text_bytes = 65536
