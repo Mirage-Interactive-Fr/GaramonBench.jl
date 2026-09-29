@@ -140,5 +140,7 @@ function _compile_bench_article(tex_source,plot_dir,paper_dir)
     end
     pdf=joinpath(paper_dir,splitext(basename(tex_source))[1]*".pdf")
     isfile(pdf) && filesize(pdf)>0 || error("LaTeX did not produce the article PDF")
+    canonical=joinpath(dirname(tex_source),basename(pdf))
+    abspath(pdf)==abspath(canonical) || cp(pdf,canonical;force=true)
     pdf
 end

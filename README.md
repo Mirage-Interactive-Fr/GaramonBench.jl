@@ -39,6 +39,8 @@ values already documented in that source; generating them does not run new
 measurements. The EGA3 library plot is refreshed after each validated case
 and again after the final CSV audit. A separate Julia process renders the
 figures so plotting packages do not remain loaded during measurement.
+Each successful article build also refreshes the PDF beside its source at
+papers/Garamon_research_article_2026-09-27_en.pdf. Git ignores this generated PDF.
 
 To resume after an interruption, repeat bench() with the same project,
 machine, sources, and output path. Completed validated cases are checked and
