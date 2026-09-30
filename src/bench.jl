@@ -64,6 +64,45 @@ function _compact_bench_result(destination,report)
         article_pdf=report["article_pdf"],medians_ns=medians)
 end
 
+"""Copy only a complete isolated paper table into DrWatson's processed data.
+The raw campaign remains in data/garamonbench and stays outside Git.
+"""
+function _publish_qualified_article_data(destination,report;
+        processed_root=DrWatson.datadir("processed","garamonbench"))
+    benchmark=joinpath(destination,"benchmark")
+    configuration=TOML.parsefile(joinpath(benchmark,"configuration.toml"))
+    configuration["campaign"]["condition"]=="isolated" || return nothing
+    manifest=TOML.parsefile(joinpath(benchmark,"campaign.toml"))
+    manifest["status"]=="complete" &&
+        manifest["run_signature"]==report["run_signature"] ||
+        error("qualified article table requires a complete matching campaign")
+    rows=_report_rows(report["summary_csv"])
+    expected=Set(configuration["grid"]["strategy"])
+    Set(row["library"] for row in rows)==expected && length(rows)==length(expected) &&
+        all(row["condition"]=="isolated" for row in rows) ||
+        error("qualified article table has missing or duplicate routes")
+    signature=report["run_signature"]
+    archive_id=first(bytes2hex(sha256(abspath(destination))),12)
+    directory=joinpath(processed_root,"external-ga-vectors",first(signature,12),archive_id)
+    mkpath(directory)
+    source=report["summary_csv"]
+    target=joinpath(directory,"summary.csv")
+    if isfile(target)
+        _resume_sha(target)==report["summary_sha256"] ||
+            error("processed article table differs from the qualified campaign")
+    else
+        cp(source,target)
+    end
+    _resume_write(joinpath(directory,"provenance.toml"),Dict(
+        "schema_version"=>1,"qualification"=>"complete_isolated_oracle_passed",
+        "run_signature"=>signature,"summary_sha256"=>report["summary_sha256"],
+        "article_source_sha256"=>report["article_source_sha256"],
+        "figure_sha256"=>report["figure_sha256"],
+        "article_sha256"=>report["article_sha256"],
+        "library_count"=>length(rows)))
+    target
+end
+
 """
     cleanup_bench_data(output; mode=:keep)
 
@@ -203,6 +242,8 @@ function bench(; output::Union{Nothing,AbstractString}=nothing,
             "article_pdf"=>article_pdf,"article_sha256"=>_resume_sha(article_pdf),
             "article_source_sha256"=>_resume_sha(article_source),
             "run_signature"=>signature))
+    isolated && _publish_qualified_article_data(destination,
+        _verified_bench_report(destination))
     cleanup_bench_data(destination;mode=cleanup)
     println("EGA3 vector product; 1024 pairs per sample; 31 warm samples")
     println(isolated ? "Condition: isolated (declared by caller)" :

@@ -85,6 +85,15 @@ compaction. Use a new output directory to measure again. The package's
 technique campaigns remain fully retained until their own figures and article
 outputs are qualified; this cleanup function does not delete them.
 
+Raw campaigns, exploratory outputs, profiling captures, and temporary build
+products under `data/garamonbench` remain ignored by Git. A complete isolated
+run also copies its qualified article table and provenance to
+`data/processed/garamonbench/external-ga-vectors/<signature>/<archive-id>/`.
+These processed CSV and TOML files are **not ignored** and can be committed
+with the article. Generated PDFs remain ignored, as required by the repository
+policy. The processed table is written only after every library route passes
+its oracle and the article artifacts are verified.
+
 Resume an interrupted run by repeating the same call with the same output
 path, project, sources, configuration, and machine. Completed cases are
 rechecked and skipped; incomplete cases are rerun. A new machine or source

@@ -133,6 +133,10 @@ end
         mkpath(joinpath(root,"data","garamonbench","preflight"))
         write(joinpath(root,"data","garamonbench","preflight","progress.toml"),"status = \"running\"\n")
         @test third["sha256"]==repository_identity(root)["sha256"]
+        mkpath(joinpath(root,"data","processed","garamonbench"))
+        write(joinpath(root,"data","processed","garamonbench","provenance.toml"),
+            "qualification = \"complete\"\n")
+        @test third["sha256"]==repository_identity(root)["sha256"]
         write(joinpath(root,"discard.so"),UInt8[0,1,2])
         @test third["sha256"]==repository_identity(root)["sha256"]
         @test_throws ErrorException archive_file!(joinpath(root,"discard.so"),joinpath(root,"copy.so"))

@@ -11,12 +11,15 @@ using Test, TOML, GaramonBench
                 Dict("status"=>"complete","run_signature"=>"test-signature"))
         end
         GaramonBench._resume_write(joinpath(benchmark,"configuration.toml"),
-            Dict("campaign"=>Dict("condition"=>"isolated")))
+            Dict("campaign"=>Dict("condition"=>"isolated"),
+                "grid"=>Dict("strategy"=>["garamon_packed","gal","versor"])))
         mkpath(joinpath(benchmark,"cases","case-1"))
         write(joinpath(benchmark,"cases","case-1","samples.csv"),"raw")
         summary=joinpath(destination,"summary.csv")
         write(summary,"library,dimension,horizon,median_ns,condition\n"*
-            "garamon_packed,3,1024,42,isolated\n")
+            "garamon_packed,3,1024,42,isolated\n"*
+            "gal,3,1024,61,isolated\n"*
+            "versor,3,1024,73,isolated\n")
         figure_dir=joinpath(destination,"plots")
         mkpath(figure_dir)
         figure=joinpath(figure_dir,"ega3_vector_libraries.pdf")
@@ -37,6 +40,12 @@ using Test, TOML, GaramonBench
             "run_signature"=>"test-signature"))
         @test cleanup_bench_data(destination)==destination
         @test isfile(joinpath(benchmark,"cases","case-1","samples.csv"))
+        processed=GaramonBench._publish_qualified_article_data(destination,
+            GaramonBench._verified_bench_report(destination);
+            processed_root=joinpath(destination,"processed"))
+        @test read(processed)==read(summary)
+        @test TOML.parsefile(joinpath(dirname(processed),"provenance.toml"))[
+            "qualification"]=="complete_isolated_oracle_passed"
         @test cleanup_bench_data(destination;mode=:temporary)==destination
         @test isempty(readdir(joinpath(benchmark,"staging")))
         @test isfile(joinpath(benchmark,"cases","case-1","samples.csv"))

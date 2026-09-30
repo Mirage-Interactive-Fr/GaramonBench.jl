@@ -31,10 +31,10 @@ function repository_files(root)
     for (directory,subdirs,names) in walkdir(root)
         filter!(subdirs) do name
             name in EXCLUDED_COMPONENTS && return false
-            # DoctorWatson stores campaign archives under data/garamonbench.
-            # Those archives can contain TOML and source snapshots, but are
-            # measurements, not inputs to the repository fingerprint.
-            relpath(joinpath(directory,name),root)!=joinpath("data","garamonbench")
+            # DoctorWatson output directories are measurements; other data
+            # directories may contain source fixtures and remain fingerprinted.
+            relpath(joinpath(directory,name),root) ∉
+                (joinpath("data","garamonbench"),joinpath("data","processed"))
         end
         for name in names
             path=joinpath(directory,name)
