@@ -119,6 +119,11 @@ function technique_profile_request(row;benchmark_root=dirname(@__DIR__))
     row["status"]=="runnable" || error("profiling requires a runnable route")
     gpu=row["environment"]=="gpu"
     catalogue=row["id"]=="15"
+    # The workspace route's standard CPU collector reported no matching stack
+    # observations at 100 × 4096 calls. Its wall_profile independently
+    # captured 56 validated stack samples on the same operation; retain that
+    # collector and omit the uninformative standard profile for ID09.
+    wall_profile_only=row["id"] in ("09","15")
     # Short kernels need a longer episode for the sampling CPU profiler to
     # produce usable stacks. Keep bounded recursive, process and device cases
     # at the shorter episode; this setting does not alter benchmark samples.
@@ -148,7 +153,7 @@ function technique_profile_request(row;benchmark_root=dirname(@__DIR__))
             "case_id"=>row["case_id"],
             "worker_project"=>joinpath(benchmark_root,gpu ? "gpu" : "worker"),
             "collectors"=>gpu ? ["benchmark","profile","profile_alloc"] :
-                catalogue ? ["benchmark","profile_alloc","wall_profile"] :
+                wall_profile_only ? ["benchmark","profile_alloc","wall_profile"] :
                 ["benchmark","profile","profile_alloc","wall_profile"],
             "diagnostics"=>gpu ? ["latency","gc","memory"] :
                 ["latency","gc","memory","jet","alloccheck"],

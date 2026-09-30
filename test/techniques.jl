@@ -123,6 +123,8 @@
     @test requests["30"]["limits"]["rss_bytes"]==6<<30
     @test requests["K3"]["limits"]["rss_bytes"]==4<<30
     @test !("profile" in requests["15"]["profiling"]["collectors"])
+    @test !("profile" in requests["09"]["profiling"]["collectors"])
+    @test "wall_profile" in requests["09"]["profiling"]["collectors"]
     mktempdir() do root
         smoke_dir=joinpath(root,"smoke")
         run_technique_smoke(smoke_dir;ids=["22"])
