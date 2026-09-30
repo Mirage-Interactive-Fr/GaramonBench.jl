@@ -134,12 +134,12 @@ function technique_profile_request(row;benchmark_root=dirname(@__DIR__))
     # aggregate RSS limit. Use 100 × 512 to retain useful sampling time while
     # bounding the live trajectory data. The approximate 2D recurrence at
     # 50 × 64 finished before the sampling profiler saw a useful stack.
-    # The process route is slower under Profile; 50 × 64 and 50 × 16 exceeded
-    # the 120 s collector limit.
+    # Every native profile sample prepares a fresh Distributed worker. Group
+    # calls in three windows instead of repeatedly paying worker startup.
     episode_repetitions=row["id"] in ("10","11","12","13","33") ? 1024 :
-        row["id"] in ("17","24","25","30","32","36","37","38","39","40","41","43","46") ? 512 : row["id"]=="28" ? 4 :
+        row["id"] in ("17","24","25","30","32","36","37","38","39","40","41","43","46") ? 512 :
         long_cpu_episode ? 4096 : 64
-    profile_repetitions=row["id"]=="28" ? 20 :
+    profile_repetitions=row["id"]=="28" ? 3 :
         row["id"] in ("40","41") ? 50 :
         row["id"]=="25" ? 100 : long_cpu_episode ? 100 : 50
     # Instrumentation creates descendant processes whose aggregate RSS can be
@@ -164,8 +164,8 @@ function technique_profile_request(row;benchmark_root=dirname(@__DIR__))
             # GC/memory diagnostics prepare five fresh states after their
             # initial oracle check. The catalogue builds native caches in
             # each isolated state, outside the timed operation.
-            "allocation_repetitions"=>1,"job_seconds"=>catalogue ? 300 : 120,
-            "total_seconds"=>catalogue ? 1500 : 600,"rss_bytes"=>profile_rss_bytes,
+            "allocation_repetitions"=>1,"job_seconds"=>catalogue ? 300 : row["id"]=="28" ? 180 : 120,
+            "total_seconds"=>catalogue ? 1500 : row["id"]=="28" ? 900 : 600,"rss_bytes"=>profile_rss_bytes,
             "scratch_bytes"=>256<<20,"archive_bytes"=>256<<20))
 end
 
@@ -269,7 +269,10 @@ Each technique has an independently resumable DrWatson archive. This function
 does not invoke PerfChecker and never reuses another machine's timing data.
 """
 function run_technique_bench(preflight,output;ids=String[],
-                             show_progress::Bool=true)
+                             show_progress::Bool=true,
+                             update_article::Bool=true,
+                             article_every_cases::Int=0)
+    article_every_cases>=0 || throw(ArgumentError("article_every_cases must be nonnegative"))
     root=dirname(@__DIR__)
     rows=technique_bench_plan(;benchmark_root=root)
     requested=Set(ids)
@@ -315,8 +318,17 @@ function run_technique_bench(preflight,output;ids=String[],
                     Base.invokelatest(run_resumable_campaign,
                         config;output=directory,
                         baseline_cache_root=joinpath(output,"_baselines"),
-                        on_progress=(archive,completed,total)->
-                            _campaign_meter_update!(meter,archive,completed,total))
+                        on_progress=(archive,completed,total)->begin
+                            _campaign_meter_update!(meter,archive,completed,total)
+                            if update_article && article_every_cases>0 &&
+                                    !isempty(completed) && length(completed)%article_every_cases==0
+                                try
+                                    Base.invokelatest(_refresh_technique_benchmark_article,row,config,archive)
+                                catch exception
+                                    @warn "Validated cases retained; article refresh failed" id=row["id"] exception
+                                end
+                            end
+                        end)
                     _campaign_meter_close!(meter;complete=true)
                 catch
                     _campaign_meter_close!(meter;complete=false)
@@ -330,12 +342,28 @@ function run_technique_bench(preflight,output;ids=String[],
                 result["reason"]=failure_message(exception)
             end
         end
+        if result["status"]=="complete" && update_article
+            try
+                article=Base.invokelatest(_refresh_technique_benchmark_article,row,
+                    technique_bench_config(row;benchmark_root=root),directory)
+                isnothing(article) && error("completed route has no qualified report cases")
+                result["article_status"]="updated"
+                result["summary_csv"]=article.summary_csv
+                result["figure_pdf"]=article.figure_pdf
+            catch exception
+                exception isa InterruptException && rethrow()
+                result["article_status"]="failed"
+                result["article_failure"]=failure_message(exception)
+            end
+        end
         results[row["id"]]=result
         ordered=[results[r["id"]] for r in rows if haskey(results,r["id"])]
         _resume_write(report,
             Dict("scope"=>"isolated native benchmark; one exact smoke case required per technique",
                 "updated_utc"=>string(now(UTC)),"technique"=>ordered,
-                "complete_count"=>count(r->r["status"]=="complete",ordered)))
+                "complete_count"=>count(r->r["status"]=="complete",ordered),
+                "article_updated_count"=>count(r->get(r,"article_status","")=="updated",ordered),
+                "article_failed_count"=>count(r->get(r,"article_status","")=="failed",ordered)))
     end
     report
 end

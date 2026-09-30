@@ -117,8 +117,10 @@
     @test requests["24"]["limits"]["profile_episode_repetitions"]==512
     @test requests["25"]["limits"]["profile_episode_repetitions"]==512
     @test requests["30"]["limits"]["profile_episode_repetitions"]==512
-    @test requests["28"]["limits"]["profile_episode_repetitions"]==4
-    @test requests["28"]["limits"]["profile_repetitions"]==20
+    @test requests["28"]["limits"]["profile_episode_repetitions"]==64
+    @test requests["28"]["limits"]["profile_repetitions"]==3
+    @test requests["28"]["limits"]["job_seconds"]==180
+    @test requests["28"]["limits"]["total_seconds"]==900
     @test requests["25"]["limits"]["rss_bytes"]==4<<30
     @test requests["30"]["limits"]["rss_bytes"]==6<<30
     @test requests["K3"]["limits"]["rss_bytes"]==4<<30
@@ -134,8 +136,8 @@
         smoke_rows=TOML.parsefile(joinpath(smoke_dir,"quickcheck.toml"))["technique"]
         @test Set(row["id"] for row in smoke_rows)==Set(["22","23"])
         bench_dir=joinpath(root,"bench")
-        run_technique_bench(smoke_dir,bench_dir;ids=["22"],show_progress=false)
-        run_technique_bench(smoke_dir,bench_dir;ids=["23"],show_progress=false)
+        run_technique_bench(smoke_dir,bench_dir;ids=["22"],show_progress=false,update_article=false)
+        run_technique_bench(smoke_dir,bench_dir;ids=["23"],show_progress=false,update_article=false)
         bench_rows=TOML.parsefile(joinpath(bench_dir,"bench-progress.toml"))["technique"]
         @test Set(row["id"] for row in bench_rows)==Set(["22","23"])
     end

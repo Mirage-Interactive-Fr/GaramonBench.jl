@@ -1,4 +1,11 @@
-function _bench_warm_times(sample_file)
+# Resolve article artifacts against the package's DrWatson layout, even when
+# the CUDA environment is active. Keep CPU and GPU figures in one manuscript.
+_article_plotsdir(parts...) = DrWatson.plotsdir(
+    joinpath(dirname(@__DIR__),"plots",parts...))
+_article_papersdir(parts...) = DrWatson.papersdir(
+    joinpath(dirname(@__DIR__),"papers",parts...))
+
+function _bench_phase_times(sample_file,selected_phase)
     lines=readlines(sample_file)
     isempty(lines) && error("empty sample file: "*sample_file)
     header=split(first(lines),',')
@@ -9,9 +16,142 @@ function _bench_warm_times(sample_file)
     for line in lines[2:end]
         fields=split(line,',')
         length(fields)==length(header) || error("sample width changed")
-        fields[phase]=="warm" && push!(values,parse(Float64,fields[time]))
+        fields[phase]==selected_phase && push!(values,parse(Float64,fields[time]))
     end
     values
+end
+
+_bench_warm_times(sample_file)=_bench_phase_times(sample_file,"warm")
+
+"""Read only oracle-validated case outputs; preserve each parameter tuple.
+Ratios always use the standard baseline on that exact case, including cached
+baseline measurements. They never compare different scenario inputs.
+"""
+function _technique_report_rows(row,config,archive)
+    manifest=TOML.parsefile(joinpath(archive,"campaign.toml"))
+    manifest["condition"]=="isolated" ||
+        error("article technique plots require an isolated campaign")
+    config["campaign"]["condition"]=="isolated" || error("unqualified report configuration")
+    samples=config["limits"]["samples"]
+    rows=NamedTuple[]
+    parameters=Dict{String,Any}()
+    for case in expand_cases(config)
+        id=case_id(case)
+        directory=joinpath(archive,"cases",id)
+        isfile(joinpath(directory,"completion.toml")) || continue
+        _resume_verify_case(directory,case,manifest["run_signature"],samples;
+            backend="benchmarktools")
+        get(case,"baseline_required",false)===true || error("article case has no standard baseline")
+        verdict=TOML.parsefile(joinpath(directory,"verdict.toml"))
+        sample_file=joinpath(directory,"samples.csv")
+        warm=_bench_warm_times(sample_file)
+        baseline=_bench_phase_times(sample_file,"baseline_warm")
+        if isempty(baseline)
+            baseline=TOML.parsefile(normpath(joinpath(directory,
+                verdict["baseline_cache_file"])))["time_ns"]
+        end
+        length(warm)==length(baseline)==samples || error("incomplete paired timing samples")
+        all(isfinite,warm) && all(isfinite,baseline) &&
+            all(>=(0),warm) && all(>=(0),baseline) || error("invalid timing samples")
+        value=median(warm)
+        reference=median(baseline)
+        ratio=reference>0 ? value/reference : NaN
+        push!(rows,(technique=row["id"],case_id=id,dimension=get(case,"dimension",0),
+            family=string(get(case,"family",get(case,"signature","scenario"))),
+            seed=case["seed"],samples=samples,median_ns=value,
+            q25_ns=quantile(warm,0.25),q75_ns=quantile(warm,0.75),
+            baseline_name=verdict["baseline_name"],baseline_median_ns=reference,
+            time_ratio=ratio,over_baseline_budget=isfinite(ratio) && ratio>10,
+            condition="isolated"))
+        parameters[id]=case
+    end
+    rows,parameters
+end
+
+function _render_technique_plot_loaded(xkcd,row,rows,total,destination)
+    isempty(rows) && error("no qualified technique cases to plot")
+    xkcd.with_theme(xkcd.theme_xkcd()) do
+        figure=xkcd.Figure(size=(960,520),backgroundcolor=:white)
+        axis=xkcd.Axis(figure[1,1],
+            title=row["id"]*" "*row["name"]*" — "*string(length(rows))*"/"*string(total)*" qualified cases",
+            xlabel="Algebra dimension",ylabel="Warm time / same-input Garamon.jl baseline",
+            yscale=log10)
+        colors=[:steelblue3,:darkorange2,:seagreen3,:purple3,:goldenrod3,:slategray3]
+        for (index,family) in enumerate(sort!(unique(r.family for r in rows)))
+            points=filter(r->r.family==family && isfinite(r.time_ratio),rows)
+            isempty(points) && continue
+            ordinary=filter(r->!r.over_baseline_budget,points)
+            outside=filter(r->r.over_baseline_budget,points)
+            color=colors[mod1(index,length(colors))]
+            isempty(ordinary) || xkcd.scatter!(axis,[r.dimension for r in ordinary],
+                [clamp(r.time_ratio,1e-4,10) for r in ordinary];
+                color=(color,0.65),markersize=9,label=family)
+            isempty(outside) || xkcd.scatter!(axis,[r.dimension for r in outside],
+                fill(10.0,length(outside));color=color,marker=:utriangle,
+                markersize=13,label=family*" >10× baseline")
+        end
+        xkcd.hlines!(axis,[1.0];color=:black,linestyle=:dash)
+        xkcd.hlines!(axis,[10.0];color=:firebrick,linestyle=:dot)
+        xkcd.ylims!(axis,1e-4,16)
+        xkcd.axislegend(axis;position=:rb)
+        xkcd.Label(figure[2,1],
+            "Each point retains its full scenario in the CSV + parameter table. Triangles: >10× baseline.\nRatios below 10⁻⁴ are clipped; zero-resolution baselines are omitted.",fontsize=14)
+        xkcd.save(destination,figure)
+    end
+    destination
+end
+
+function _refresh_technique_benchmark_article(row,config,archive;
+        processed_root=DrWatson.datadir(joinpath(dirname(@__DIR__),"data","processed","garamonbench","techniques")),
+        figure_root=_article_plotsdir("garamonbench","techniques","qualified"),
+        compile_article::Bool=true)
+    rows,parameters=_technique_report_rows(row,config,archive)
+    isempty(rows) && return nothing
+    manifest=TOML.parsefile(joinpath(archive,"campaign.toml"))
+    signature=manifest["run_signature"]
+    archive_id=first(bytes2hex(sha256(abspath(archive))),12)
+    directory=joinpath(processed_root,row["id"],first(signature,12),archive_id)
+    mkpath(directory)
+    summary=joinpath(directory,"summary.csv")
+    temporary,io=mktemp(directory);close(io)
+    try
+        write_csv(temporary,rows)
+        Base.Filesystem.rename(temporary,summary)
+    finally
+        isfile(temporary) && rm(temporary)
+    end
+    _resume_write(joinpath(directory,"case_parameters.toml"),parameters)
+    mkpath(figure_root)
+    figure=joinpath(figure_root,"plot_technique_"*row["id"]*".pdf")
+    @eval import CairoMakie
+    cairo=Base.invokelatest(getfield,@__MODULE__,:CairoMakie)
+    previous=Base.invokelatest(cairo.Makie.current_default_theme)
+    @eval import XKCDMakie
+    xkcd=Base.invokelatest(getfield,@__MODULE__,:XKCDMakie)
+    try
+        mktempdir() do temporary
+            built=joinpath(temporary,"plot.pdf")
+            Base.invokelatest(_render_technique_plot_loaded,xkcd,row,rows,
+                length(expand_cases(config)),built)
+            _publish_article_pdf(built,figure)
+        end
+    finally
+        Base.invokelatest(cairo.Makie.set_theme!,previous)
+    end
+    _resume_write(joinpath(directory,"provenance.toml"),Dict(
+        "schema_version"=>1,"qualification"=>"isolated_completed_cases_oracle_and_baseline_passed",
+        "technique"=>row["id"],"run_signature"=>signature,
+        "campaign_status"=>manifest["status"],"completed_cases"=>length(rows),
+        "total_cases"=>length(expand_cases(config)),"summary_sha256"=>_resume_sha(summary),
+        "parameters_sha256"=>_resume_sha(joinpath(directory,"case_parameters.toml")),
+        "figure_sha256"=>_resume_sha(figure),
+        "baseline_budget_ratio"=>10,"archive"=>abspath(archive)))
+    if compile_article
+        source=joinpath(dirname(@__DIR__),"papers","Garamon_research_article_2026-09-27_en.tex")
+        _compile_bench_article(source,figure_root,
+            _article_papersdir("garamonbench","techniques","qualified"))
+    end
+    (;summary_csv=summary,figure_pdf=figure,completed_cases=length(rows))
 end
 
 function _bench_summary(config,benchmark_output,destination)
@@ -132,8 +272,8 @@ end
 """Display oracle coverage beside the method while performance is pending."""
 function _refresh_technique_preflight_article(row,preflight)
     technique_smoke_evidence(row,preflight)
-    figure_dir=DrWatson.plotsdir("garamonbench","techniques","preflight")
-    paper_dir=DrWatson.papersdir("garamonbench","techniques","preflight")
+    figure_dir=_article_plotsdir("garamonbench","techniques","preflight")
+    paper_dir=_article_papersdir("garamonbench","techniques","preflight")
     figure=joinpath(figure_dir,"preflight_technique_"*row["id"]*".pdf")
     mkpath(figure_dir)
     @eval import CairoMakie
@@ -168,17 +308,35 @@ end
 _render_bench_plot(summary_csv::AbstractString,plot_pdf)=
     _render_bench_plot(_report_rows(summary_csv),plot_pdf)
 
+function _publish_article_pdf(source,destination)
+    mkpath(dirname(destination))
+    temporary,io=mktemp(dirname(destination))
+    close(io)
+    try
+        cp(source,temporary;force=true)
+        # libuv rename publishes the complete PDF in one filesystem operation.
+        Base.Filesystem.rename(temporary,destination)
+    finally
+        isfile(temporary) && rm(temporary)
+    end
+    destination
+end
+
 function _compile_bench_article(tex_source,plot_dir,paper_dir;
     publish_canonical::Bool=true)
     compiler=Sys.which("latexmk")
     isnothing(compiler) && error("latexmk is required to compile the article after benchmarking")
     isfile(tex_source) || error("Garamon article source is missing")
     mkpath(paper_dir)
+    pdf=joinpath(paper_dir,splitext(basename(tex_source))[1]*".pdf")
     mktempdir() do auxiliary
-        preflight=DrWatson.plotsdir("garamonbench","techniques","preflight")
-        texinputs=join((plot_dir,preflight,dirname(tex_source),
+        isolated_output=joinpath(auxiliary,"pdf")
+        mkpath(isolated_output)
+        preflight=_article_plotsdir("garamonbench","techniques","preflight")
+        qualified=_article_plotsdir("garamonbench","techniques","qualified")
+        texinputs=join((plot_dir,qualified,preflight,dirname(tex_source),
             get(ENV,"TEXINPUTS","")),':')*":"
-        command=`$compiler -pdf -silent -interaction=nonstopmode -halt-on-error -auxdir=$auxiliary -outdir=$paper_dir $tex_source`
+        command=`$compiler -pdf -silent -interaction=nonstopmode -halt-on-error -auxdir=$auxiliary -outdir=$isolated_output $tex_source`
         logfile=joinpath(auxiliary,"latexmk.log")
         open(logfile,"w") do io
             try
@@ -189,11 +347,12 @@ function _compile_bench_article(tex_source,plot_dir,paper_dir;
                 error("LaTeX compilation failed: "*join(last(lines,min(25,length(lines))),"\n"))
             end
         end
+        built=joinpath(isolated_output,basename(pdf))
+        isfile(built) && filesize(built)>0 || error("LaTeX did not produce the article PDF")
+        _publish_article_pdf(built,pdf)
+        canonical=joinpath(dirname(tex_source),basename(pdf))
+        publish_canonical && abspath(pdf)!=abspath(canonical) &&
+            _publish_article_pdf(built,canonical)
     end
-    pdf=joinpath(paper_dir,splitext(basename(tex_source))[1]*".pdf")
-    isfile(pdf) && filesize(pdf)>0 || error("LaTeX did not produce the article PDF")
-    canonical=joinpath(dirname(tex_source),basename(pdf))
-    publish_canonical && abspath(pdf)!=abspath(canonical) &&
-        cp(pdf,canonical;force=true)
     pdf
 end

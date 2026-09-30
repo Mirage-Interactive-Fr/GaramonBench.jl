@@ -1,9 +1,9 @@
 function _external_article_dirs(archive::AbstractString,condition::AbstractString)
     signature=TOML.parsefile(joinpath(archive,"campaign.toml"))["run_signature"]
     archive_id=first(bytes2hex(sha256(abspath(archive))),12)
-    figure_dir=DrWatson.plotsdir("garamonbench","external-ga-vectors",
+    figure_dir=_article_plotsdir("garamonbench","external-ga-vectors",
         condition,first(signature,12),archive_id)
-    paper_dir=DrWatson.papersdir("garamonbench","external-ga-vectors",
+    paper_dir=_article_papersdir("garamonbench","external-ga-vectors",
         condition,first(signature,12),archive_id)
     figure_dir,paper_dir,signature
 end

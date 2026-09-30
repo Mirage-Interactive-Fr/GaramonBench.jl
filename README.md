@@ -187,6 +187,17 @@ Preflight cards fill empty slots temporarily; only qualified completed
 performance data from the dedicated machine may replace them with benchmark
 figures.
 
+After each completed technique, `run_technique_bench` exports its paired
+timing summary to `data/processed/garamonbench/techniques/`, with a parameter
+table and provenance. It renders an XKCDMakie vector PDF in the method's
+existing article slot and compiles the article. Each point compares the
+strategy with its Garamon.jl baseline on the same inputs; triangles mark
+times above 10× baseline. The CSV retains the uncapped ratios.
+Pass `article_every_cases=100` to refresh during a long route using only its
+completed, oracle-validated cases. The plot title reports partial coverage.
+Pass `update_article=false` to postpone rendering. A completed campaign can
+be called again to regenerate its article artifacts without rerunning cases.
+
 The configurations under config/ and adapters under adapters/ define
 oracle preflights, CPU and GPU routes, matched C++/Julia kernels, cache
 policies, sparse and dense storage, targeted outputs, workspaces, and
@@ -219,3 +230,9 @@ The article's unqualified performance slots are deliberate. Preflight cards
 report oracle coverage without timings. A performance plot is published only
 after its generating case set is qualified; exploratory timings are never
 inserted automatically into the manuscript.
+
+CPU and GPU article artifacts use the package's `plots/` and `papers/`
+DrWatson directories, regardless of the active Julia environment. Each LaTeX
+build compiles in a private temporary directory, then atomically publishes
+the completed PDF. Independent preflights can therefore refresh the article
+concurrently without sharing compiler output files.

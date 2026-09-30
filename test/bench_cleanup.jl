@@ -67,3 +67,93 @@ using Test, TOML, GaramonBench
     end
     @test_throws ArgumentError cleanup_bench_data("/tmp";mode=:invalid)
 end
+
+@testset "technique article data use validated same-case baselines" begin
+    mktempdir() do root
+        archive=joinpath(root,"benchmark","28")
+        mkpath(archive)
+        config=Dict{String,Any}("campaign"=>Dict("condition"=>"isolated","seed"=>17),
+            "grid"=>Dict("dimension"=>[2,3,4],"strategy"=>["fixture"]),
+            "case_defaults"=>Dict("adapter"=>"fixture","baseline_required"=>true),
+            "limits"=>Dict("samples"=>2,"max_cases"=>3))
+        signature=repeat("a",64)
+        GaramonBench._resume_write(joinpath(archive,"campaign.toml"),Dict(
+            "condition"=>"isolated","status"=>"running","run_signature"=>signature))
+        cases=expand_cases(config)
+        cache_path=joinpath(root,"benchmark","_baselines",repeat("b",64)*".toml")
+        mkpath(dirname(cache_path))
+        GaramonBench._resume_write(cache_path,Dict("time_ns"=>[2.0,2.0]))
+        for (index,case) in enumerate(cases[1:2])
+            id=case_id(case)
+            directory=joinpath(archive,"cases",id)
+            mkpath(directory)
+            GaramonBench._resume_write(joinpath(directory,"case.toml"),case)
+            records=[(case_id=id,phase="warm",sample=i,time_ns=index==1 ? 3.0 : 24.0) for i in 1:2]
+            index==1 && append!(records,[(case_id=id,phase="baseline_warm",sample=i,time_ns=2.0) for i in 1:2])
+            GaramonBench.write_csv(joinpath(directory,"samples.csv"),records)
+            verdict=Dict{String,Any}("case_id"=>id,"oracle_passed"=>true,
+                "benchmark_backend"=>"BenchmarkTools","baseline_required"=>true,
+                "baseline_oracle_passed"=>true,"baseline_samples_verified"=>2,
+                "baseline_name"=>"standard_same_fixture")
+            if index==2
+                verdict["baseline_cache_file"]=relpath(cache_path,directory)
+                verdict["baseline_cache_sha256"]=GaramonBench._resume_sha(cache_path)
+                verdict["baseline_cache_hit"]=true
+            end
+            GaramonBench._resume_write(joinpath(directory,"verdict.toml"),verdict)
+            marker=Dict{String,Any}("case_id"=>id,"status"=>"validated",
+                "run_signature"=>signature,"warm_samples"=>2,"record_count"=>length(records),
+                "diagnostic_artifacts"=>Any[])
+            for (file,key) in (("case.toml","case_sha256"),("samples.csv","samples_sha256"),("verdict.toml","verdict_sha256"))
+                marker[key]=GaramonBench._resume_sha(joinpath(directory,file))
+            end
+            GaramonBench._resume_write(joinpath(directory,"completion.toml"),marker)
+        end
+        row=Dict("id"=>"28","name"=>"fixture")
+        rows,parameters=GaramonBench._technique_report_rows(row,config,archive)
+        @test length(rows)==2 # The uncompleted third case is never plotted.
+        @test getproperty.(rows,:time_ratio)==[1.5,12.0]
+        @test getproperty.(rows,:over_baseline_budget)==[false,true]
+        @test parameters[case_id(cases[2])]==cases[2]
+        report=GaramonBench._refresh_technique_benchmark_article(row,config,archive;
+            processed_root=joinpath(root,"processed"),figure_root=joinpath(root,"plots"),
+            compile_article=false)
+        @test report.completed_cases==2
+        @test startswith(read(report.figure_pdf,String),"%PDF-")
+        @test occursin("time_ratio,over_baseline_budget",read(report.summary_csv,String))
+        provenance=TOML.parsefile(joinpath(dirname(report.summary_csv),"provenance.toml"))
+        @test provenance["total_cases"]==3 && provenance["completed_cases"]==2
+        @test provenance["campaign_status"]=="running"
+        config["campaign"]["condition"]="exploratory_interference"
+        @test_throws ErrorException GaramonBench._technique_report_rows(row,config,archive)
+        config["campaign"]["condition"]="isolated"
+        write(cache_path,"changed cached baseline")
+        @test_throws ErrorException GaramonBench._technique_report_rows(row,config,archive)
+    end
+end
+
+@testset "concurrent article builds publish complete PDFs" begin
+    @test GaramonBench._article_plotsdir("probe") ==
+        joinpath(pkgdir(GaramonBench),"plots","probe")
+    @test GaramonBench._article_papersdir("probe") ==
+        joinpath(pkgdir(GaramonBench),"papers","probe")
+    if isnothing(Sys.which("latexmk"))
+        @test_skip false
+    else
+        mktempdir() do directory
+            source=joinpath(directory,"article.tex")
+            write(source,"\\documentclass{article}\n\\begin{document}\nConcurrent publication.\n\\end{document}\n")
+            figures=joinpath(directory,"plots")
+            papers=joinpath(directory,"papers")
+            mkpath(figures)
+            tasks=[@async GaramonBench._compile_bench_article(source,figures,papers)
+                for _ in 1:2]
+            outputs=fetch.(tasks)
+            @test outputs[1]==outputs[2]
+            @test startswith(read(outputs[1],String),"%PDF-")
+            @test occursin("%%EOF",read(outputs[1],String))
+            @test read(joinpath(directory,"article.pdf"))==read(outputs[1])
+            @test readdir(papers)==["article.pdf"]
+        end
+    end
+end
