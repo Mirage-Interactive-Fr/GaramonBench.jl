@@ -507,10 +507,14 @@ campaign = ""
 [[technique]]
 id = "44"
 name = "multimodular-crt"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/modular.jl"
+test = "test/modular.jl"
 campaign = ""
+preflight_config = "config/modular_crt_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_modular_crt.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", mode = "prepared", coefficient_bits = 8, prime_bits = 17, max_primes = 4, horizon = 1}
 
 [[technique]]
 id = "45"

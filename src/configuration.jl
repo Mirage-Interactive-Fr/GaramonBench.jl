@@ -35,6 +35,14 @@ function load_config(path)
         isempty(get(campaign,"interference_label","")) && error("interference_label is required")
     end
     haskey(config,"grid") || error("missing grid")
+    for rule in get(config,"case_constraints",Any[])
+        haskey(rule,"when") && haskey(rule,"require") ||
+            error("case constraint needs when and require")
+        for (key,value) in merge(rule["when"],rule["require"])
+            haskey(config["grid"],key) && value in config["grid"][key] ||
+                error("case constraint refers to an absent grid value")
+        end
+    end
     config["config_path"]=abspath(path)
     return config
 end
@@ -54,6 +62,16 @@ end
 function expand_cases(config)
     # DrWatson expands independent axes into a Cartesian parameter grid.
     cases=DrWatson.dict_list(config["grid"])
+    # Smoke plans collapse the grid after `load_config` validated the original
+    # rules. A rule whose `when` value was removed cannot constrain that plan.
+    constraints=[rule for rule in get(config,"case_constraints",Any[])
+        if all(haskey(config["grid"],key) && value in config["grid"][key]
+            for (key,value) in rule["when"])]
+    filter!(cases) do item
+        all(rule->!all(get(item,key,nothing)==value for (key,value) in rule["when"]) ||
+            all(get(item,key,nothing)==value for (key,value) in rule["require"]),
+            constraints)
+    end
     length(cases)<=get(get(config,"limits",Dict()),"max_cases",256) || error("case budget")
     base=get(config,"case_defaults",Dict{String,Any}())
     result=Dict{String,Any}[]

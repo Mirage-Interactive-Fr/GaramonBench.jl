@@ -543,10 +543,40 @@ basis and output contract.
 \techniqueplot{38}{Factored Givens basis change}{Transformation count, support expansion, conditioning, and total episode.}
 
 \subsection{Exact modular and filtered decisions}
-Multimodular computation can reconstruct coefficients over a
-suitable exact domain if denominator handling, bad primes, a
-sufficient modulus, and reconstruction bounds are established.
-Zero modulo a few primes does not certify an exact zero. A filtered
+For integer coefficients and a diagonal integer metric, the coefficient
+of output mask $k$ has the exact sum
+\begin{equation}
+c_k=\sum_{a\mathbin{\triangle}b=k}
+  \epsilon(a,b)\,x_a y_b\!
+  \prod_{i\in a\cap b}g_i,
+\qquad
+B_k=\sum_{a\mathbin{\triangle}b=k}
+  \left|x_a y_b\prod_{i\in a\cap b}g_i\right|,
+\end{equation}
+where $\epsilon$ is the blade permutation sign and $B_k$ bounds
+$|c_k|$. The implementation prepares structural paths and small prime
+moduli, evaluates the same full sum modulo each prime, and reconstructs
+the signed integer by the Chinese remainder theorem only when the product
+of the moduli exceeds $2\max_k B_k$. This makes even a reconstructed zero
+exact. If the selected prime budget is insufficient, an exact arbitrary
+precision accumulation takes over; no contribution is removed.
+Multimodular arithmetic is attractive when coefficient size makes native
+arbitrary precision multiplication expensive, but reduction, primes,
+reconstruction, and the coefficient-bound pass may outweigh it for short
+episodes~\cite{vanhoe}.
+
+The campaign varies 17- and 31-bit primes, one to sixteen primes,
+coefficient sizes, metric signatures, ten ambient dimensions, and reuse
+horizons. It compares a prepared structural plan and a one-shot call with
+direct arbitrary precision accumulation under identical seeded inputs;
+irrelevant prime settings are omitted from the direct baseline. The
+requested output is the complete
+integer multivector in both modes; the independent oracle accumulates
+signed blade pairs directly. These comparisons establish whether and
+where the modular route repays preparation, without claiming a speed
+advantage before the dedicated run.
+
+A filtered
 adaptive-precision predicate can use a cheap sign computation
 when a proven error interval excludes zero and invoke an exact
 fallback otherwise~\cite{cgalfiltered}. This is a decision
@@ -790,6 +820,10 @@ Proceedings of the IEEE 93, 216--231 (2005).
 \bibitem{cgalfiltered} CGAL, \emph{Filtered kernel},
 reference manual.
 \url{https://doc.cgal.org/Manual/3.5.1/doc_html/cgal_manual/Kernel_23_ref/Class_Filtered_kernel.html}.
+\bibitem{vanhoe} J. van der Hoeven,
+\emph{Fast Chinese Remaindering in Practice},
+Mathematical Aspects of Computer and Information Sciences (2017).
+\url{https://www.texmacs.org/joris/chinese-macis/chinese-macis.html}.
 \bibitem{juliathreads} Julia manual, \emph{Multi-Threading}.
 \url{https://docs.julialang.org/en/v1/manual/multi-threading/}.
 \bibitem{cudaperf} CUDA.jl, \emph{Performance Tips}.
