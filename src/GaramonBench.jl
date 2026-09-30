@@ -19,7 +19,8 @@ export BenchmarkAdapter, register_adapter!, load_config, expand_cases, case_id,
        technique_profile_request, run_technique_profiles,
        compatibility_matrix, ensure_cpp_source, cpp_source_root, cpp_source_revision,
        cpp_toolchain, cpp_toolchain_environment,
-       external_ga_candidates, ensure_external_ga_source, bench
+       external_ga_candidates, ensure_external_ga_source, bench,
+       cleanup_bench_data
 
 include("cpp_install.jl")
 include("external_ga.jl")

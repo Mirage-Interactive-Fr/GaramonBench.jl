@@ -10,6 +10,8 @@ include("filtered_sign_oracle_preflight.jl")
 include("propagated_certificates_oracle_preflight.jl")
 include("invariant_sectors_oracle_preflight.jl")
 include("cross_gram_oracle_preflight.jl")
+include("fermionic_gaussian_oracle_preflight.jl")
+include("bench_cleanup.jl")
 
 @testset "article has empty result slots until a qualified run" begin
     source=joinpath(pkgdir(GaramonBench),"papers",

@@ -577,10 +577,28 @@ mutation and reuse horizon. Its cost accounting includes matrix
 construction and certificate validation. No rank claim is extended
 to unrelated coefficients or nondecomposable inputs.
 
-Fermionic Gaussian representations are similarly powerful only when
-inputs and operations preserve the Gaussian class. This separate
-proposal needs a class certificate and an exact fallback before it can
-be compared with general multivector products.
+The implemented fermionic route is an explicitly restricted,
+number-conserving Gaussian subclass. A decomposable \(k\)-particle
+Slater state is stored as an \(n\times k\) orbital matrix \(U\).
+Each elementary quadratic-generator map
+\(\exp(ca_i^\dagger a_j)\), \(i\ne j\), induces the exact one-body
+shear \(U_{i,:}\leftarrow U_{i,:}+cU_{j,:}\). A sequence therefore
+acts on the orbital matrix without expanding the full Fock-space
+amplitude vector. For a target Slater matrix \(V\), the requested
+overlap is \(\det(V^\mathsf{T}U')\), with \(U'\) the transformed
+orbitals. We compare a factored shear sequence with its materialized
+one-body matrix, including the different preparation and memory costs.
+The integers make this a generally nonunitary but exact algebraic
+subclass; it does not cover pairing terms, arbitrary Gaussian maps,
+non-Gaussian states, or general multivectors. Such inputs are rejected
+instead of silently projected onto the Slater class. The independent
+oracle evaluates the small overlap determinant by a permutation sum,
+and algebra tests expand selected Slater states to check the same
+scalar pairing. The campaign varies mode count, particle count, shear
+count, orbital support, target relation and reuse horizon. The broader
+simulation context of noninteracting fermions and Slater states is
+established in~\cite{terhal2002,divincenzo2005}; the present exact-integer
+shear restriction is our benchmark contract.
 
 \techniqueplot{36}{Cross-Gram rank}{Certified rank, pairing construction, selected scalar cost, and fallback.}
 \techniqueplot{37}{Fermionic Gaussian operators}{Class certification, closed operations, conversion, and fallback.}
@@ -850,6 +868,14 @@ STOC, 67--74 (2007).
 \emph{Garamon: A Geometric Algebra Library Generator},
 Advances in Applied Clifford Algebras 29, 69 (2019).
 \url{https://doi.org/10.1007/s00006-019-0987-7}.
+\bibitem{terhal2002} B. M. Terhal and D. P. DiVincenzo,
+\emph{Classical simulation of noninteracting-fermion quantum circuits},
+Physical Review A 65, 032325 (2002).
+\url{https://arxiv.org/abs/quant-ph/0108010}.
+\bibitem{divincenzo2005} D. P. DiVincenzo and B. M. Terhal,
+\emph{Fermionic Linear Optics Revisited},
+Foundations of Physics 35, 1967--1984 (2005).
+\url{https://arxiv.org/abs/quant-ph/0403031}.
 \bibitem{cppmain} Garamon C++, generation pipeline,
 \path{src/main.cpp}, audited revision.
 \url{https://github.com/vincentnozick/garamon/blob/6267161e35be57873fa553f266ef04f2ba32d2e5/src/main.cpp}.

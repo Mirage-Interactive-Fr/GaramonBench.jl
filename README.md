@@ -63,6 +63,28 @@ To place data on a dedicated volume:
 bench(output="/data/garamonbench/run-001", isolated=true)
 ~~~
 
+`bench()` keeps every raw sample, source snapshot, preflight archive and
+intermediate by default. To remove only unfinished staging contents after a
+completed run, use `bench(output="/data/garamonbench/run-001",
+isolated=true, cleanup=:temporary)`. To retain only the verified CSV summary,
+figure, article PDF and their hashes, use `cleanup=:paper`. The same option
+can be supplied when resuming an already completed run; completed cases are
+checked and skipped before cleanup. A later call on a compacted directory
+returns its verified final results without trying to recreate deleted cases.
+
+The cleanup operation is also available separately:
+
+~~~julia
+cleanup_bench_data("/data/garamonbench/run-001"; mode=:paper)
+~~~
+
+`:paper` removes the preflight and benchmark archives only after checking the
+completed campaign, the CSV, the figure, the article PDF, and their hashes.
+The detailed samples and source snapshots cannot be audited after this
+compaction. Use a new output directory to measure again. The package's
+technique campaigns remain fully retained until their own figures and article
+outputs are qualified; this cleanup function does not delete them.
+
 Resume an interrupted run by repeating the same call with the same output
 path, project, sources, configuration, and machine. Completed cases are
 rechecked and skipped; incomplete cases are rerun. A new machine or source
