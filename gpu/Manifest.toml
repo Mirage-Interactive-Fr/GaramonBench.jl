@@ -800,7 +800,7 @@ uuid = "dbf15181-0796-4f0c-80cc-db9023881340"
 version = "0.0.1"
 
 [[deps.GaramonBench]]
-deps = ["BenchmarkTools", "CMake_jll", "CairoMakie", "Clang_jll", "Dates", "DrWatson", "Eigen_jll", "Garamon", "JSON", "Libdl", "Ninja_jll", "PerfChecker", "Pkg", "Random", "SHA", "Statistics", "TOML", "UUIDs", "XKCDMakie"]
+deps = ["BenchmarkTools", "CMake_jll", "CairoMakie", "Clang_jll", "Dates", "DrWatson", "Eigen_jll", "Garamon", "JSON", "Libdl", "Ninja_jll", "PerfChecker", "Pkg", "ProgressMeter", "Random", "SHA", "Statistics", "TOML", "UUIDs", "XKCDMakie"]
 path = ".."
 uuid = "898aa6b3-2c79-4d30-93dc-a3eb36738598"
 version = "0.1.0"

@@ -2,7 +2,7 @@
 
 julia_version = "1.13.0"
 manifest_format = "2.1"
-project_hash = "afa99765d91ae518db367321ce5b5ed137c21339"
+project_hash = "f4c934c4cba2fa75809bd6042937e2583093ed27"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -651,7 +651,7 @@ uuid = "dbf15181-0796-4f0c-80cc-db9023881340"
 version = "0.0.1"
 
 [[deps.GaramonBench]]
-deps = ["BenchmarkTools", "CMake_jll", "CairoMakie", "Clang_jll", "Dates", "DrWatson", "Eigen_jll", "Garamon", "JSON", "Libdl", "Ninja_jll", "PerfChecker", "Pkg", "Random", "SHA", "Statistics", "TOML", "UUIDs", "XKCDMakie"]
+deps = ["BenchmarkTools", "CMake_jll", "CairoMakie", "Clang_jll", "Dates", "DrWatson", "Eigen_jll", "Garamon", "JSON", "Libdl", "Ninja_jll", "PerfChecker", "Pkg", "ProgressMeter", "Random", "SHA", "Statistics", "TOML", "UUIDs", "XKCDMakie"]
 path = "."
 uuid = "898aa6b3-2c79-4d30-93dc-a3eb36738598"
 version = "0.1.0"

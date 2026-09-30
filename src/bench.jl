@@ -178,7 +178,8 @@ machine for measurement. Repeating a call with the same output verifies and
 skips completed cases.
 """
 function bench(; output::Union{Nothing,AbstractString}=nothing,
-    isolated::Bool=false,cleanup::Symbol=:keep)
+    isolated::Bool=false,cleanup::Symbol=:keep,
+    show_progress::Bool=true)
     cleanup in (:keep,:temporary,:paper) ||
         throw(ArgumentError("cleanup must be :keep, :temporary, or :paper"))
     destination = isnothing(output) ? DrWatson.datadir("garamonbench", "external-ga-vectors",
@@ -206,13 +207,25 @@ function bench(; output::Union{Nothing,AbstractString}=nothing,
             config["campaign"]["interference_label"] = ""
         end
     end
-    preflight_output = run_resumable_campaign(preflight;
-        output=joinpath(destination, "preflight"))
+    preflight_meter=_campaign_meter("Preflight";enabled=show_progress)
+    preflight_output=try
+        result=run_resumable_campaign(preflight;
+            output=joinpath(destination,"preflight"),
+            on_progress=(archive,completed,total)->
+                _campaign_meter_update!(preflight_meter,archive,completed,total))
+        _campaign_meter_close!(preflight_meter;complete=true)
+        result
+    catch
+        _campaign_meter_close!(preflight_meter;complete=false)
+        rethrow()
+    end
     resumable_status(preflight, preflight_output)["status"] == "complete" ||
         error("external GA preflight incomplete")
     condition=isolated ? "isolated" : "exploratory"
     article_source=joinpath(root,"papers","Garamon_research_article_2026-09-27_en.tex")
+    benchmark_meter=_campaign_meter("Benchmark";enabled=show_progress)
     function on_progress(archive,completed,total)
+        _campaign_meter_update!(benchmark_meter,archive,completed,total)
         isempty(completed) && return
         try
             julia=joinpath(Sys.BINDIR,Base.julia_exename())
@@ -222,8 +235,15 @@ function bench(; output::Union{Nothing,AbstractString}=nothing,
             @warn "Article update failed; validated benchmark cases remain resumable" exception
         end
     end
-    benchmark_output = run_resumable_campaign(benchmark;
-        output=joinpath(destination, "benchmark"),on_progress)
+    benchmark_output=try
+        result=run_resumable_campaign(benchmark;
+            output=joinpath(destination,"benchmark"),on_progress)
+        _campaign_meter_close!(benchmark_meter;complete=true)
+        result
+    catch
+        _campaign_meter_close!(benchmark_meter;complete=false)
+        rethrow()
+    end
     resumable_status(benchmark, benchmark_output)["status"] == "complete" ||
         error("external GA benchmark incomplete")
 

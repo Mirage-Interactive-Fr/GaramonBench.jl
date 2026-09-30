@@ -102,6 +102,23 @@
     end
 end
 
+@testset "terminal progress resumes from validated case count" begin
+    io=IOBuffer()
+    meter=GaramonBench._campaign_meter("Resume test";enabled=true,output=io)
+    GaramonBench._campaign_meter_update!(meter,"archive",["a","b"],4)
+    @test meter.meter.start==2
+    @test meter.meter.counter==2
+    GaramonBench._campaign_meter_update!(meter,"archive",["a","b","c"],4)
+    @test meter.meter.counter==3
+    GaramonBench._campaign_meter_update!(meter,"archive",["a","b","c","d"],4)
+    GaramonBench._campaign_meter_close!(meter;complete=true)
+    @test meter.last_count==4
+    @test occursin("resumed 2/4 validated cases",String(take!(io)))
+    quiet=GaramonBench._campaign_meter("Quiet";enabled=false,output=IOBuffer())
+    GaramonBench._campaign_meter_update!(quiet,"archive",["a"],2)
+    @test isnothing(quiet.meter)
+end
+
 @testset "BenchmarkTools archive resumes without PerfChecker" begin
     config=load_config(joinpath(@__DIR__,"..","config","smoke.toml"))
     config["campaign"]["backend"]="benchmarktools"

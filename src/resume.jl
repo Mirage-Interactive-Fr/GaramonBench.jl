@@ -358,6 +358,41 @@ end
 audit_resumable_archive(path::AbstractString,output)=
     audit_resumable_archive(load_config(path),output)
 
+mutable struct _CampaignMeter
+    label::String
+    enabled::Bool
+    output::IO
+    meter::Union{Nothing,ProgressMeter.Progress}
+    last_count::Int
+end
+
+_campaign_meter(label;enabled::Bool=true,output::IO=stderr)=
+    _CampaignMeter(String(label),enabled,output,nothing,0)
+
+function _campaign_meter_update!(display::_CampaignMeter,archive,completed,total)
+    display.enabled || return nothing
+    count=length(completed)
+    if isnothing(display.meter)
+        display.meter=ProgressMeter.Progress(total;start=count,
+            desc=display.label,dt=0.5,output=display.output,enabled=true)
+        count>0 && println(display.output,display.label,": resumed ",count,
+                           "/",total," validated cases")
+    end
+    count>=display.last_count || error("validated progress cannot decrease")
+    display.last_count=count
+    ProgressMeter.update!(display.meter,count;force=true,
+        showvalues=[("Validated",string(count," / ",total))])
+    nothing
+end
+
+function _campaign_meter_close!(display::_CampaignMeter;complete::Bool)
+    isnothing(display.meter) && return nothing
+    complete ? ProgressMeter.finish!(display.meter) :
+        ProgressMeter.cancel(display.meter,
+            display.label*": interrupted; validated cases remain resumable")
+    nothing
+end
+
 function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache_root=nothing)
     cases=expand_cases(config)
     backend=get(config["campaign"],"backend","")

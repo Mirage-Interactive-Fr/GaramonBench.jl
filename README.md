@@ -45,6 +45,11 @@ comparison does not isolate a language effect because the internal
 strategies differ. The run writes a CSV summary and a vector PDF chart.
 A default run is marked exploratory; its timings do not populate the
 article.
+ProgressMeter.jl shows separate preflight and benchmark bars
+with counts and an ETA. Repeating the same call after an interruption starts
+the bars at the number of validated cases in the archive. The ETA uses cases
+finished since this launch, so it is approximate when case sizes differ.
+Use `show_progress=false` to suppress the bars in redirected logs.
 
 On the dedicated machine, after confirming it has no competing workload:
 
@@ -141,6 +146,12 @@ run_technique_profiles(preflight, joinpath(root, "profiles"))
 run_technique_bench(preflight, joinpath(root, "benchmark"))
 ~~~
 
+`run_technique_bench` shows a ProgressMeter.jl bar for each active route.
+On restart, each bar starts at that route's validated case count;
+fully completed routes are skipped. The ETA is recalculated from the current
+run and may change substantially as dimensions and strategies vary. Pass
+`show_progress=false` to disable the bars.
+
 The smoke run checks one oracle case per registered route. A passed case
 creates a vector validation card beside that method in the article, with no
 timing or speed claim. Profiling captures
@@ -149,8 +160,7 @@ parameter grid only after a matching smoke archive exists. Each route has its
 own resumable directory; completed cases are verified and skipped when the
 benchmark call is repeated. An incomplete PerfChecker capture requires a new
 profile output directory. Use `ids=["12", "13"]` on any of these functions to
-select routes. Registry entries still marked `research` are reported as such
-and are not measured. Run CPU routes from the package environment with their
+select routes. Run CPU routes from the package environment with their
 registered thread count; GPU routes require the package's `gpu/` environment.
 Routes that declare the same exact generated inputs share one measured
 Garamon.jl baseline. Its samples are stored under `benchmark/_baselines/` and

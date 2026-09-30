@@ -1,6 +1,7 @@
 module GaramonBench
 
 using Dates, DrWatson, SHA, TOML, UUIDs, Random, Pkg, BenchmarkTools, JSON, Statistics
+using ProgressMeter
 
 # Correctness-only preflight must not initialize PerfChecker. Measurement paths
 # load it explicitly when selected.

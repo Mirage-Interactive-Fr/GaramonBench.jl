@@ -132,15 +132,16 @@ function technique_profile_request(row;benchmark_root=dirname(@__DIR__))
     # The process route is slower under Profile; 50 × 64 and 50 × 16 exceeded
     # the 120 s collector limit.
     episode_repetitions=row["id"] in ("10","11","12","13","33") ? 1024 :
-        row["id"] in ("17","24","25","30","32","36","37","38","39","43","46") ? 512 : row["id"]=="28" ? 4 :
+        row["id"] in ("17","24","25","30","32","36","37","38","39","40","41","43","46") ? 512 : row["id"]=="28" ? 4 :
         long_cpu_episode ? 4096 : 64
     profile_repetitions=row["id"]=="28" ? 20 :
+        row["id"] in ("40","41") ? 50 :
         row["id"]=="25" ? 100 : long_cpu_episode ? 100 : 50
     # Instrumentation creates descendant processes whose aggregate RSS can be
     # much larger than the kernel's live data. These ceilings are sequential
     # and explicit: the 65D indexing route crossed 4 GiB even at 100 × 512.
     profile_rss_bytes=row["id"]=="30" ? 6<<30 : row["id"] in ("32","36","37","38","39","43","45","46") ? 5<<30 :
-        row["id"] in ("15","17","24","25","K3") ? 4<<30 : 3<<30
+        row["id"] in ("15","17","24","25","40","41","K3") ? 4<<30 : 3<<30
     Dict{String,Any}("schema_version"=>1,
         "profiling"=>Dict{String,Any}(
             "case_config"=>joinpath(benchmark_root,row["config"]),
@@ -259,7 +260,8 @@ end
 Each technique has an independently resumable DrWatson archive. This function
 does not invoke PerfChecker and never reuses another machine's timing data.
 """
-function run_technique_bench(preflight,output;ids=String[])
+function run_technique_bench(preflight,output;ids=String[],
+                             show_progress::Bool=true)
     root=dirname(@__DIR__)
     rows=technique_bench_plan(;benchmark_root=root)
     requested=Set(ids)
@@ -299,9 +301,19 @@ function run_technique_bench(preflight,output;ids=String[])
                     include_technique_adapter(adapter,config)
                     push!(included,adapter)
                 end
-                Base.invokelatest(run_resumable_campaign,
-                    config;output=directory,
-                    baseline_cache_root=joinpath(output,"_baselines"))
+                meter=_campaign_meter("Technique "*row["id"];
+                                      enabled=show_progress)
+                try
+                    Base.invokelatest(run_resumable_campaign,
+                        config;output=directory,
+                        baseline_cache_root=joinpath(output,"_baselines"),
+                        on_progress=(archive,completed,total)->
+                            _campaign_meter_update!(meter,archive,completed,total))
+                    _campaign_meter_close!(meter;complete=true)
+                catch
+                    _campaign_meter_close!(meter;complete=false)
+                    rethrow()
+                end
                 result["status"]="complete"
                 result["archive"]=directory
             catch exception
