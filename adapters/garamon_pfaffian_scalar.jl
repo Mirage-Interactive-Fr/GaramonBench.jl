@@ -40,9 +40,9 @@ end
 
 function pf35_generate(case,directory,rng)
     n = case["dimension"]
-    n in (2,3,4) || error("Pfaffian oracle support budget")
+    2<=n<=64 || error("Pfaffian oracle mask budget")
     k = case["chain_length"]
-    k in (2,4,6) || error("even chain budget")
+    k in (2,4,6,8,12,16) || error("even chain budget")
     strategy = case["strategy"]
     strategy in ("pfaffian","precontracted","full","recursive") ||
         error("Pfaffian strategy")

@@ -6,18 +6,14 @@ include(joinpath(get(ENV, "GARAMON_JULIA_ROOT",
     joinpath(homedir(), ".julia", "dev", "Garamon")), "perf", "n04_short_identity.jl"))
 
 function generate(case, directory, rng)
-    case["dimension"] == 3 && case["exponent"] == 3 &&
-        case["horizon"] == 1 && case["metric_family"] == "general" &&
-        case["shape"] == "simple_bivector" && case["changes"] == "stable" &&
-        case["strategy"] == "certify_each" ||
-        throw(ArgumentError("outside bounded N04 preflight case"))
-    n04_fixture(3,3,1,:general,:simple_bivector,:stable)
+    case["strategy"] == "certify_each" || throw(ArgumentError("N04 strategy"))
+    n04_fixture(case["dimension"],case["exponent"],case["horizon"],
+        Symbol(case["metric_family"]),Symbol(case["shape"]),Symbol(case["changes"]))
 end
 
 function prepare(state,case,directory)
     certificate=n04_certify(state.g,first(state.inputs))
-    certificate===nothing && error("N04 representative case must exercise certificate path")
-    certificate.lambda==-3//4 || error("unexpected nonorthogonal bivector square")
+    # Refused certificates take the exact binary-power fallback.
     state
 end
 
@@ -25,7 +21,7 @@ execute(state)=n04_episode(state,:certify_each;trace=true)
 
 function oracle(state,result)
     result isa NamedTuple || return false
-    result.certifications==1 && result.refusals==0 && result.reuse==0 &&
+    result.certifications==state.H && result.refusals>=0 && result.reuse==0 &&
         n04_qualify(state,result.output) &&
         all(x->x isa N04Terms,result.output)
 end

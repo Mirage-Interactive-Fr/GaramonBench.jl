@@ -290,3 +290,66 @@ DrWatson directories, regardless of the active Julia environment. Each LaTeX
 build compiles in a private temporary directory, then atomically publishes
 the completed PDF. Independent preflights can therefore refresh the article
 concurrently without sharing compiler output files.
+
+## V50: registered campaign coverage
+
+Every registry entry has executable code, an independent bounded oracle gate, a resumable parameter grid and its own article figure slot. These gates do not assert a performance ranking or correctness of every future parameter combination. Native PerfChecker probes recorded on earlier revisions remain historical evidence; captures used to qualify a run must match the archived source identity.
+
+The dedicated campaign schedules 56351 cases before optional user restrictions. `benchmark_grid` overrides extend the one-case preflight without changing its case identity. The full rational sandwich at high ambient dimension is reserved for the dedicated machine and has an explicit expansion budget.
+
+| ID | Route | Code | Oracle | Scheduled cases | Figure slot |
+|---|---|---|---|---:|---|
+| 01 | dense-global | implemented | bounded | 132 | 01 |
+| 02 | sparse-supports | implemented | bounded | 78 | 02 |
+| 03 | grade-blocks | implemented | bounded | 168 | 03 |
+| 04 | targeted-recursion | implemented | bounded | 84 | 04 |
+| 05 | exact-grade-filter | implemented | bounded | 84 | 05 |
+| 06 | xor-join | implemented | bounded | 84 | 06 |
+| 07 | join-three | implemented | bounded | 84 | 07 |
+| 08 | prepared-plans | implemented | bounded | 78 | 08 |
+| 09 | workspaces | implemented | bounded | 78 | 09 |
+| 10 | lru-plan-cache | implemented | bounded | 504 | 10 |
+| 11 | roulette-plan-eviction | implemented | bounded | 12600 | 11 |
+| 12 | tinylfu-plan-admission | prototype | bounded | 1512 | 12 |
+| 13 | sieve-plan-eviction | prototype | bounded | 504 | 13 |
+| 14 | jit-code-generation | implemented | bounded | 60 | 14 |
+| 15 | precompilation-catalogue | prototype | bounded | 21 | 15 |
+| 16 | dag-subexpression-sharing | implemented | bounded | 4 | 16 |
+| 17 | factorized-blades-versors | implemented | bounded | 288 | 17 |
+| 18 | active-coordinate-subspace | implemented | bounded | 2 | 18 |
+| 19 | exact-tensor-train | prototype | bounded | 42 | 19 |
+| 20 | weighted-zdd | prototype | bounded | 72 | 20 |
+| 21 | materialized-trie | prototype | bounded | 60 | 21 |
+| 22 | clifford-matrix-gfft | prototype | bounded | 348 | 22 |
+| 23 | egraph-rewriting | prototype | bounded | 680 | 23 |
+| 24 | deferred-exact-replay | prototype | bounded | 648 | 24 |
+| 25 | approximate-pruning-roulette | prototype | bounded | 35 | 25 |
+| 26 | analytic-triple-selector | prototype | bounded | 78 | 26 |
+| 27 | cpu-threads-simd-batches | implemented | bounded | 2 | 27 |
+| 28 | cpu-processes | prototype | bounded | 288 | 28 |
+| 29 | gpu-kernels-transfers | prototype | bounded | 4 | 29 |
+| 30 | blade-masks-combinatorial-index | implemented | bounded | 28 | 30 |
+| 31 | binary-support-rank | prototype | bounded | 168 | 31 |
+| 32 | invariant-sectors | prototype | bounded | 3240 | 32 |
+| 33 | radical-nilpotence | prototype | bounded | 432 | 33 |
+| 34 | short-polynomial-identity | prototype | bounded | 5376 | 34 |
+| 35 | pfaffian-scalar-chain | prototype | bounded | 216 | 35 |
+| 36 | cross-gram-rank | prototype | bounded | 4320 | 36 |
+| 37 | fermionic-gaussian-operators | prototype | bounded | 1440 | 37 |
+| 38 | givens-basis-change | prototype | bounded | 2880 | 38 |
+| 39 | signed-disjoint-convolution | prototype | bounded | 540 | 39 |
+| 40 | bilinear-kernel-synthesis | prototype | bounded | 360 | 40 |
+| 41 | verified-superoptimization | prototype | bounded | 1080 | 41 |
+| 42 | wavefront-recursion | prototype | bounded | 8064 | 42 |
+| 43 | adaptive-radix-tree | prototype | bounded | 1008 | 43 |
+| 44 | multimodular-crt | prototype | bounded | 4590 | 44 |
+| 45 | filtered-adaptive-precision | prototype | bounded | 2430 | 45 |
+| 46 | propagated-structural-certificates | prototype | bounded | 1440 | 46 |
+| K1 | K1 | prototype | bounded | 78 | K1 |
+| K3 | K3 | prototype | bounded | 39 | K3 |
+
+Dimension limits follow the output contract, mask representation and oracle budget. Catalogue requests cover the trained EGA3 algebra and untrained/changing 4D contexts; they are not a general-dimension catalogue. The full-coefficient tensor-train grid is restricted to dimensions 2–8 because its independent oracle enumerates all blade pairs. The materialized trie uses UInt64 masks up to dimension 64. Large ambient-dimensional Pfaffian chains keep the active vector span small so the full-output oracle remains tractable.
+
+The radical-inverse route varies ambient dimension, radical size, active nonradical coordinates, metric and coefficient phase. Ordinary Garamon.jl general `inv` is limited to five coordinates. Above that ambient dimension its baseline operates in the exactly isomorphic active coordinate subalgebra of at most five axes and embeds the complete inverse back. This restriction is explicit; no general high-dimensional inverse performance claim is implied.
+
+Run the boundary gates without timing samples using `julia --project=. --threads=1 test/campaign_variants.jl`. Optional subsets are selected with `GARAMONBENCH_VARIANT_IDS`; values `28` and `15` exercise real workers and native catalogue reloads respectively. These remain correctness gates, not benchmarks.

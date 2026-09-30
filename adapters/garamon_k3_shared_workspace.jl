@@ -7,19 +7,21 @@ include(joinpath(get(ENV,"GARAMON_JULIA_ROOT",
 const Q=Rational{BigInt}
 
 function generate(case,directory,rng)
-    case["dimension"]==3 && case["strategy"]=="shared_cached" &&
-        case["horizon"]==3 || error("outside K3 minimal case")
-    G=Q[1 1 0;1 -1 0;0 0 0]
-    U1=Q[1 2 0 1;2 1 1 -1;1 0 2 1]
+    n=case["dimension"];H=case["horizon"]
+    3<=n<=129 && case["strategy"]=="shared_cached" &&
+        3<=H<=32 || error("outside K3 campaign domain")
+    G=zeros(Q,n,n);G[1,1]=1;G[1,2]=G[2,1]=1;G[2,2]=-1
+    for i in 3:n-1;G[i,i]=1;end
+    U1=zeros(Q,n,4);U1[[1,2,n],:]=Q[1 2 0 1;2 1 1 -1;1 0 2 1]
     U2=copy(U1);U2[1,1]+=1
     chains=[[1,2,3,4],[4,3,2,1],[1,1,2,2]]
-    pools=[U1,U1,U2]
+    pools=[t%3==0 ? U2 : U1 for t in 1:H]
     expected=hcat((n05_shared_oracle(G,U,chains) for U in pools)...)
     (;G,pools,chains,expected)
 end
 
 function prepare(fixture,case,directory)
-    plan=n05_shared_plan(3,4,fixture.chains)
+    plan=n05_shared_plan(size(fixture.G,1),4,fixture.chains)
     workspace=n05_shared_workspace(plan,fixture.G,first(fixture.pools);
         policy=:check_inputs)
     (;fixture,plan,workspace)
@@ -59,5 +61,5 @@ register_adapter!(BenchmarkAdapter(name="garamon_k3_shared_workspace",
     contract="owned exact rational scalar chain matrix with shared contractions",
     capabilities=Dict("exact_oracle"=>"independent Chevalley Clifford-word scalar expansion",
         "combination"=>"K3: Pfaffian, shared contraction DAG, retained workspace",
-        "reuse"=>"three calls include one unchanged and one changed input",
+        "reuse"=>"episodes cycle unchanged and changed pools with exact cache invalidation",
         "gpu_kernel"=>false));replace=true)

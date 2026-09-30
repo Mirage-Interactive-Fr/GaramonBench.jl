@@ -25,9 +25,10 @@ end
 
 function k1_generate(case,directory,rng)
     n = case["dimension"]
-    n==65 || error("K1 minimal dimension budget")
+    3<=n<=129 || error("K1 dimension budget")
     case["strategy"]=="compact_workspace" || error("K1 minimal strategy")
-    case["horizon"]==2 || error("K1 must reuse the workspace on two inputs")
+    horizon=case["horizon"]
+    2<=horizon<=32 || error("K1 workspace reuse horizon")
     diagonal = Int64[iseven(i) ? -1 : 1 for i in 1:n]
     low = big(1)
     second = big(1) << 1
@@ -37,18 +38,18 @@ function k1_generate(case,directory,rng)
     targets = sort!(unique(BigInt[xor(a,b) for a in left for b in right]))
     positions = Dict(mask=>i for (i,mask) in enumerate(targets))
     coefficients = [(rand(rng,Int64(1):Int64(3),length(left)),
-                     rand(rng,Int64(1):Int64(3),length(right))) for _ in 1:2]
+                     rand(rng,Int64(1):Int64(3),length(right))) for _ in 1:horizon]
     coefficients[2] == coefficients[1] &&
         (coefficients[2][1][1] += 1)
-    expected = zeros(Int64,length(targets),2)
-    for t in 1:2
+    expected = zeros(Int64,length(targets),horizon)
+    for t in 1:horizon
         av,bv = coefficients[t]
         for (i,a) in enumerate(left), (j,b) in enumerate(right)
             mask,factor = k1_word(a,b,diagonal)
             expected[positions[mask],t] += factor*av[i]*bv[j]
         end
     end
-    (;n,diagonal,left,right,targets,coefficients,expected)
+    (;n,diagonal,left,right,targets,coefficients,expected,horizon)
 end
 
 function k1_prepare(fixture,case,directory)
@@ -71,10 +72,10 @@ function k1_prepare(fixture,case,directory)
 end
 
 function k1_execute(state)
-    outputs = Matrix{Float64}(undef,length(state.fixture.targets),2)
+    outputs = Matrix{Float64}(undef,length(state.fixture.targets),state.fixture.horizon)
     first_owned = nothing
     saved = nothing
-    for t in 1:2
+    for t in 1:state.fixture.horizon
         result = compact_rank_product!(state.workspace,state.inputs[t]...)
         if t==1
             first_owned = result
@@ -106,7 +107,7 @@ register_adapter!(BenchmarkAdapter(name="garamon_binary_rank_compact_workspace",
     baseline_name="garamon_julia_direct_product",
     oracle=(state,result)->size(result)==size(state.fixture.expected) &&
         result==state.fixture.expected,
-    contract="owned Float64 matrix of every reachable ambient coefficient for two products",
+    contract="owned Float64 matrix of every reachable ambient coefficient across a workspace-reuse episode",
     capabilities=Dict("exact_oracle"=>"independent Int64 ambient Clifford-word inversions",
         "combination"=>"K1: 08+09+31", "route"=>"compact_rank_product! with reused workspace",
         "output_ownership"=>"first SparseMultiVector remains intact after second product",

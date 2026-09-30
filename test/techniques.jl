@@ -44,6 +44,7 @@
     @test count(row->row["status"]=="runnable",bench)==48
     @test all(row["benchmark_cases"]>=1 && row["benchmark_backend"]=="BenchmarkTools"
         for row in bench if row["status"]=="runnable")
+    @test all(row["benchmark_cases"]>1 for row in bench)
     grade=only(filter(row->row["id"]=="05",bench))
     xorjoin=only(filter(row->row["id"]=="06",bench))
     @test GaramonBench.technique_bench_config(grade)["grid"]["operation"]==["left"]

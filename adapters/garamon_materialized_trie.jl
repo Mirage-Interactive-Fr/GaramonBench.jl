@@ -17,15 +17,29 @@ end
 
 function mt21_generate(case, directory, rng)
     n = case["dimension"]
-    n == 6 && case["operation"] == "wedge" || error("trie wedge smoke contract")
+    6<=n<=64 && case["operation"] == "wedge" || error("trie wedge dimension/operation budget")
     left = Dict{UInt64,Int64}(0x03=>2, 0x05=>-1, 0x12=>3, 0x28=>2)
     right = Dict{UInt64,Int64}(0x0c=>3, 0x09=>-2, 0x30=>1, 0x06=>4)
-    expected = zeros(Int64, 1 << n)
+    coordinates=[1,2,3,4,n-1,n]
+    embed(mask)=sum((UInt64(1)<<(coordinates[i]-1) for i in 1:6
+        if !iszero(mask & (UInt64(1)<<(i-1))));init=UInt64(0))
+    left=Dict(embed(mask)=>value for (mask,value) in left)
+    right=Dict(embed(mask)=>value for (mask,value) in right)
+    horizon=get(case,"horizon",1)
+    1<=horizon<=32 || error("trie episode horizon budget")
+    if haskey(case,"horizon")
+        left=Dict(mask=>value*rand(rng,(-1,1)) for (mask,value) in sort!(collect(left);by=first))
+        right=Dict(mask=>value*rand(rng,(-1,1)) for (mask,value) in sort!(collect(right);by=first))
+    end
+    targets=n==6 ? UInt64.(0:63) :
+        sort!(unique(UInt64[xor(a,b) for a in keys(left) for b in keys(right)]))
+    positions=Dict(mask=>i for (i,mask) in enumerate(targets))
+    expected = zeros(Int64, length(targets))
     for (amask, avalue) in left, (bmask, bvalue) in right
         output, sign = mt21_word(amask, bmask, n)
-        expected[Int(output) + 1] += sign * avalue * bvalue
+        expected[positions[output]] += sign * avalue * bvalue
     end
-    (; n, left, right, expected)
+    (; n, left, right, expected,targets,horizon)
 end
 
 function mt21_prepare(fixture, case, directory)
@@ -39,9 +53,17 @@ function mt21_prepare(fixture, case, directory)
     (; fixture, left_trie, right_trie)
 end
 
-function mt21_execute(state)
+function mt21_once(state)
     terms = trie_wedge(state.left_trie, state.right_trie, state.fixture.n)
-    Float64[get(terms, UInt64(mask), 0.0) for mask in 0:(1 << state.fixture.n)-1]
+    Float64[get(terms,mask,0.0) for mask in state.fixture.targets]
+end
+
+mt21_execute(state)=state.fixture.horizon==1 ? mt21_once(state) :
+    [mt21_once(state) for _ in 1:state.fixture.horizon]
+
+function mt21_baseline_once(state)
+    product=wedge(state.left,state.right)
+    Float64[coefficient_mask(product,mask) for mask in state.fixture.targets]
 end
 
 register_adapter!(BenchmarkAdapter(name="garamon_materialized_trie",
@@ -55,13 +77,12 @@ register_adapter!(BenchmarkAdapter(name="garamon_materialized_trie",
             right=multivector(ga,Dict(mask=>Float64(value)
                 for (mask,value) in f.right);storage=:sparse))
     end,
-    baseline_execute=state->begin
-        product=wedge(state.left,state.right)
-        Float64[coefficient_mask(product,mask) for mask in 0:(1<<state.fixture.n)-1]
-    end,
+    baseline_execute=state->state.fixture.horizon==1 ? mt21_baseline_once(state) :
+        [mt21_baseline_once(state) for _ in 1:state.fixture.horizon],
     baseline_name="garamon_julia_sparse_direct_wedge",
-    oracle=(state,result)->result == state.fixture.expected,
-    contract="owned Float64 vector of every 6D ordered-blade coefficient",
+    oracle=(state,result)->state.fixture.horizon==1 ? result==state.fixture.expected :
+        length(result)==state.fixture.horizon && all(==(state.fixture.expected),result),
+    contract="owned exact Float64 coefficients; all 6D masks or all reachable high-dimensional masks",
     capabilities=Dict("exact_oracle"=>"independent Int64 mask-pair disjointness and inversion parity",
         "operation"=>"materialized-trie wedge, construction in preparation",
         "coefficient_domain"=>"small integer inputs exactly representable in Float64",

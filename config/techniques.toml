@@ -194,6 +194,7 @@ preflight_smoke = {dimension = 4, signature = "mixed", strategy = "generated", h
 
 [[technique]]
 id = "15"
+benchmark_grid = {dimension = [3,4], scenario = ["known","late","changing"], request_index = [1,4,12], horizon = [1,8,32]}
 name = "precompilation-catalogue"
 state = "prototype"
 source = "perf/precompile_lifecycle.jl"
@@ -220,6 +221,7 @@ preflight_smoke = {dimension = 3, structure = "shared", strategy = "prepared_dag
 [[technique]]
 id = "17"
 name = "factorized-blades-versors"
+benchmark_grid = {dimension = [2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32, 64], reflection_count = [1, 2, 4, 8], horizon = [1, 8, 32], seed = [20260928, 20260929]}
 state = "implemented"
 source = "src/transformations.jl"
 test = "test/runtests.jl"
@@ -244,6 +246,7 @@ preflight_smoke = {dimension = 65, operation = "geometric"}
 [[technique]]
 id = "19"
 name = "exact-tensor-train"
+benchmark_grid = {dimension = [2, 3, 4, 5, 6, 7, 8], horizon = [1, 8, 32], seed = [20260928, 20260929]}
 state = "prototype"
 source = "src/trains.jl"
 test = "test/runtests.jl"
@@ -256,6 +259,7 @@ preflight_smoke = {dimension = 4, strategy = "bounded_exact_separable_product"}
 [[technique]]
 id = "20"
 name = "weighted-zdd"
+benchmark_grid = {dimension = [4, 5, 6, 8, 10, 12, 16, 24, 32, 48, 64, 128], horizon = [1, 8, 32], seed = [20260928, 20260929]}
 state = "prototype"
 source = "src/weighted_zdd.jl"
 test = "test/weighted_zdd.jl"
@@ -268,6 +272,7 @@ preflight_smoke = {dimension = 4, signature = "signed_degenerate", strategy = "w
 [[technique]]
 id = "21"
 name = "materialized-trie"
+benchmark_grid = {dimension = [6, 7, 8, 10, 12, 16, 24, 32, 48, 64], horizon = [1, 8, 32], seed = [20260928, 20260929]}
 state = "prototype"
 source = "src/materialized_trie.jl"
 test = ""
@@ -306,6 +311,7 @@ preflight_smoke = {dimension = 4, support_count = 2, factor_count = 3, support_p
 
 [[technique]]
 id = "24"
+benchmark_grid = {dimension = [2,3,4,5,8,12,16,32,64,65,96,128], signature = ["positive","indefinite","degenerate"], regime = ["contracting","neutral","amplifying"], recurrence = ["affine","bilinear"], horizon = [2,4,8]}
 name = "deferred-exact-replay"
 state = "prototype"
 source = "perf/pruning_recurrences.jl"
@@ -359,6 +365,7 @@ preflight_smoke = {dimension = 8, signature = "mixed", strategy = "threaded_resi
 
 [[technique]]
 id = "28"
+benchmark_grid = {dimension = [2,3,4,5,6,8,10,12,16,32,64,128], family = ["sparse8","subalgebra64"], workers = [1,2,4], batch = [4,16,64,256]}
 name = "cpu-processes"
 state = "prototype"
 source = "perf/parallel_batches.jl"
@@ -396,6 +403,7 @@ preflight_smoke = {dimension = 65, strategy = "indices", horizon = 1}
 
 [[technique]]
 id = "31"
+benchmark_grid = {dimension = [2,3,4,5,6,8,10,12,16,32,64,65,128,129], signature = ["mixed","degenerate"], horizon = [1,8,32], seed = [20260928,20260929]}
 name = "binary-support-rank"
 state = "prototype"
 source = "perf/binary_rank.jl"
@@ -420,6 +428,7 @@ preflight_smoke = {dimension = 4, mode = "prepared", output_parity = "even", reg
 
 [[technique]]
 id = "33"
+benchmark_grid = {dimension = [6,7,8,10,12,16,24,32,48,64,96,128], radical_dimensions = [1,2], active_nonradical_coordinates = [1,2,3], metric_family = ["positive","signed"], phase = [1,2,3]}
 name = "radical-nilpotence"
 state = "prototype"
 source = "perf/n03_radical.jl"
@@ -432,6 +441,7 @@ preflight_smoke = {dimension = 4, radical_dimensions = 1, active_nonradical_coor
 
 [[technique]]
 id = "34"
+benchmark_grid = {dimension = [2,3,4,5,6,8,10,12,16,32,64,65,128,129], exponent = [0,1,2,3,16,64], horizon = [1,32], metric_family = ["euclidean","signed","null","general"], shape = ["vector","simple_bivector","mixed_positive","negative_scalar_vector"], changes = ["stable","coefficients"]}
 name = "short-polynomial-identity"
 state = "prototype"
 source = "perf/n04_short_identity.jl"
@@ -444,6 +454,7 @@ preflight_smoke = {dimension = 3, exponent = 3, horizon = 1, metric_family = "ge
 
 [[technique]]
 id = "35"
+benchmark_grid = {dimension = [2,3,4,5,6,8,10,12,16,24,32,64], chain_length = [2,4,6,8,12,16], horizon = [1,8,16]}
 name = "pfaffian-scalar-chain"
 state = "prototype"
 source = "perf/n05_pfaffian.jl"
@@ -594,6 +605,7 @@ preflight_smoke = {dimension = 4, mode = "certified", regime = "stable", signatu
 
 [[combination]]
 id = "K1"
+benchmark_grid = {dimension = [3,4,5,6,8,10,12,16,32,64,65,128,129], horizon = [2,8,32], seed = [20260928,20260929]}
 techniques = ["06", "08", "09", "31"]
 source = "perf/binary_rank_compact.jl"
 test = "perf/binary_rank_compact_tests.jl"
@@ -605,6 +617,7 @@ preflight_smoke = {dimension = 65, strategy = "compact_workspace", horizon = 2}
 
 [[combination]]
 id = "K3"
+benchmark_grid = {dimension = [3,4,5,6,8,10,12,16,32,64,65,128,129], horizon = [3,8,32]}
 techniques = ["09", "16", "35"]
 source = "perf/n05_shared_workspace.jl"
 test = "perf/n05_shared_tests.jl"

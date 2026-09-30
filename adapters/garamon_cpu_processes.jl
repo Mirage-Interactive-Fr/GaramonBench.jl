@@ -36,32 +36,35 @@ function cp28_expected(fixture,batch)
 end
 
 function cp28_generate(case,directory,rng)
-    case["dimension"]==4 || error("process preflight dimension budget")
-    case["family"]=="sparse8" || error("process preflight family")
+    2<=case["dimension"]<=128 || error("process dimension budget")
+    case["family"] in ("sparse8","subalgebra64") || error("process family")
     case["strategy"]=="resident_process" || error("process preflight strategy")
-    case["workers"]==1 || error("single worker required for minimal preflight")
-    case["batch"]==4 || error("one cycle of four variants required")
-    fixture = parallel_fixture(4,:sparse8)
-    expected = cp28_expected(fixture,4)
-    (;fixture,expected,batch=4)
+    case["workers"] in (1,2,4) || error("process worker budget")
+    case["batch"] in (4,16,64,256) || error("process batch budget")
+    fixture = parallel_fixture(case["dimension"],Symbol(case["family"]))
+    parallel_admission(fixture,case["batch"])=="admitted" || error("process batch memory/path admission")
+    expected = cp28_expected(fixture,case["batch"])
+    (;fixture,expected,batch=case["batch"],workers=case["workers"])
 end
 
 function cp28_prepare(generated,case,directory)
     Sys.free_memory()>=1<<30 || error("process preflight memory admission")
     project = dirname(Base.active_project())
-    pids = addprocs(1;exeflags=`--startup-file=no --threads=1,0 --gcthreads=1 --project=$project`,
+    pids = addprocs(generated.workers;exeflags=`--startup-file=no --threads=1,0 --gcthreads=1 --project=$project`,
         env=["OPENBLAS_NUM_THREADS"=>"1","JULIA_NUM_THREADS"=>"1,0"])
     try
-        pid = only(pids)
-        remotecall_wait(Core.eval,pid,Main,:(pushfirst!(LOAD_PATH,$CP28_TARGET_ROOT)))
-        remotecall_wait(Base.include,pid,Main,
-            joinpath(CP28_TARGET_ROOT,"perf","parallel_batches_common.jl"))
+        for pid in pids
+            remotecall_wait(Core.eval,pid,Main,:(pushfirst!(LOAD_PATH,$CP28_TARGET_ROOT)))
+            remotecall_wait(Base.include,pid,Main,
+                joinpath(CP28_TARGET_ROOT,"perf","parallel_batches_common.jl"))
         # PerfChecker loads this adapter in a private SharedCase module. Sending
         # a function from that module to a fresh Distributed worker asks the
         # worker to deserialize a module it does not have. Evaluate the loaded
         # production entrypoint in the worker's Main instead.
-        remotecall_fetch(Core.eval,pid,Main,:(parallel_remote_setup(4,:sparse8)))
-        return (;generated,pid)
+            n=generated.fixture.n;family=generated.fixture.family
+            remotecall_fetch(Core.eval,pid,Main,:(parallel_remote_setup($n,$(QuoteNode(family)))))
+        end
+        return (;generated,pid=first(pids),pids)
     catch
         rmprocs(pids)
         rethrow()
@@ -70,14 +73,22 @@ end
 
 function cp28_execute(state)
     batch=state.generated.batch
-    remotecall_fetch(Core.eval,state.pid,Main,
-        :((worker_id=Distributed.myid(),os_pid=getpid(),
-            output=parallel_remote_chunk(1,$batch,nothing))))
+    ranges=parallel_ranges(batch,length(state.pids))
+    jobs=map(zip(state.pids,ranges)) do (pid,(first_job,count))
+        remotecall(Core.eval,pid,Main,
+            :((worker_id=Distributed.myid(),os_pid=getpid(),
+                output=parallel_remote_chunk($first_job,$count,nothing))))
+    end
+    results=fetch.(jobs)
+    (;worker_id=first(results).worker_id,os_pid=first(results).os_pid,
+        worker_ids=[r.worker_id for r in results],os_pids=[r.os_pid for r in results],
+        output=reduce(hcat,[r.output for r in results]))
 end
 
 function cp28_oracle(state,result)
     result.worker_id==state.pid && result.worker_id!=Distributed.myid() &&
         result.os_pid!=getpid() &&
+        result.worker_ids==state.pids && all(!=(getpid()),result.os_pids) &&
         size(result.output)==size(state.generated.expected) &&
         result.output==state.generated.expected
 end
@@ -96,9 +107,9 @@ function cp28_baseline_execute(state)
 end
 
 function cp28_cleanup(state)
-    state.pid in workers() || return nothing
-    rmprocs(state.pid)
-    state.pid in workers() && error("process preflight worker survived cleanup")
+    live=intersect(state.pids,workers())
+    isempty(live) || rmprocs(live)
+    isempty(intersect(state.pids,workers())) || error("process worker survived cleanup")
     nothing
 end
 
@@ -110,7 +121,7 @@ register_adapter!(BenchmarkAdapter(name="garamon_cpu_processes",
     baseline_oracle=(state,result)->result.output==state.generated.expected,
     contract="owned Float64 packed coefficient matrix plus distinct worker identity",
     capabilities=Dict("exact_oracle"=>"independent Int64 Euclidean Clifford-word inversions",
-        "execution"=>"one actual Distributed worker with resident workspace",
+        "execution"=>"one, two or four actual Distributed workers with private resident workspaces",
         "cleanup"=>"rmprocs in adapter cleanup, including failed setup",
-        "scope"=>"one batch of four fixture variants, not process throughput",
+        "scope"=>"partitioned batches of 4,16,64,256 jobs cycling four seeded fixture variants",
         "generation_includes_oracle"=>true,"gpu_kernel"=>false));replace=true)

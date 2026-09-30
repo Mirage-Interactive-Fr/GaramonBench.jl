@@ -64,6 +64,17 @@ available for the later benchmark. Planning executes no workload.
 """
 function technique_bench_config(row;benchmark_root=dirname(@__DIR__))
     config=load_config(joinpath(benchmark_root,row["config"]))
+    registry=TOML.parsefile(joinpath(benchmark_root,"config","techniques.toml"))
+    entry=only(filter(e->e["id"]==row["id"],vcat(registry["technique"],registry["combination"])))
+    for (key,values) in get(entry,"benchmark_grid",Dict())
+        config["grid"][key]=values
+    end
+    if row["id"]=="15"
+        config["case_constraints"]=[Dict("when"=>Dict("scenario"=>scenario),
+            "require"=>scenario=="known" ? Dict("dimension"=>3,"request_index"=>1) :
+                Dict("dimension"=>4))
+            for scenario in ("known","late","changing")]
+    end
     for key in ("strategy","operation")
         if haskey(row["case"],key) && haskey(config["grid"],key)
             config["grid"][key]=[row["case"][key]]
@@ -78,6 +89,9 @@ function technique_bench_config(row;benchmark_root=dirname(@__DIR__))
         (config["grid"]["frequency_slots"]=[256])
     row["id"] in ("10","12","13") &&
         (config["grid"]["draw_seed"]=[first(config["grid"]["draw_seed"])])
+    bound=prod(big(length(axis)) for axis in Base.values(config["grid"]))
+    bound<=100_000 || error("technique benchmark grid exceeds 100000 cases")
+    config["limits"]["max_cases"]=max(get(config["limits"],"max_cases",1),Int(bound))
     config["campaign"]["backend"]="benchmarktools"
     config["campaign"]["condition"]="isolated"
     config["campaign"]["interference_label"]=""

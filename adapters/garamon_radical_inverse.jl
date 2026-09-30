@@ -6,12 +6,10 @@ include(joinpath(get(ENV, "GARAMON_JULIA_ROOT",
     joinpath(homedir(), ".julia", "dev", "Garamon")), "perf", "n03_radical.jl"))
 
 function generate(case, directory, rng)
-    case["dimension"] == 4 && case["radical_dimensions"] == 1 &&
-        case["active_nonradical_coordinates"] == 2 &&
-        case["metric_family"] == "signed" && case["phase"] == 1 &&
-        case["strategy"] == "radical_series" ||
-        throw(ArgumentError("outside bounded N03 preflight case"))
-    input=n03_input(4,1,2,:signed,1,N03_Q)
+    2<=case["dimension"]<=128 && case["strategy"] == "radical_series" ||
+        throw(ArgumentError("outside bounded N03 campaign domain"))
+    input=n03_input(case["dimension"],case["radical_dimensions"],
+        case["active_nonradical_coordinates"],Symbol(case["metric_family"]),case["phase"],N03_Q)
     expected=n03_oracle_inverse(input.a,input.g)
     (;input,expected)
 end
@@ -22,16 +20,22 @@ end
 
 function baseline_execute(state)
     input=state.input
-    gram=zeros(N03_Q,length(input.g),length(input.g))
-    for i in eachindex(input.g)
-        gram[i,i]=input.g[i]
+    # Ordinary inv supports at most five coordinates. In larger ambient
+    # dimensions use the exactly isomorphic active coordinate subalgebra;
+    # unused axes cannot contribute. No radical-series algorithm is used.
+    axes=length(input.g)<=5 ? collect(eachindex(input.g)) :
+        [i for i in eachindex(input.g) if any(mask->!iszero(mask&n03_bit(i)),keys(input.a))]
+    length(axes)<=5 || throw(ArgumentError("ordinary inverse active-coordinate budget"))
+    gram=zeros(N03_Q,length(axes),length(axes))
+    for (j,i) in enumerate(axes)
+        gram[j,j]=input.g[i]
     end
     ga=algebra(gram)
-    a=multivector(ga,input.a;storage=:sparse)
+    reduced=Dict(foldl(|,(n03_bit(j) for (j,i) in enumerate(axes) if !iszero(mask&n03_bit(i)));init=UInt128(0))=>value for (mask,value) in input.a)
+    a=multivector(ga,reduced;storage=:sparse)
     inverse=inv(a)
-    Dict{UInt128,N03_Q}(UInt128(mask)=>N03_Q(value)
-        for mask in 0:(1<<length(input.g))-1
-        for value in (coefficient_mask(inverse,mask),) if !iszero(value))
+    Dict{UInt128,N03_Q}(foldl(|,(n03_bit(i) for (j,i) in enumerate(axes) if !iszero(mask&n03_bit(j)));init=UInt128(0))=>N03_Q(value)
+        for (mask,value) in sparse(inverse).values if !iszero(value))
 end
 
 function oracle(state,result)
@@ -48,7 +52,8 @@ register_adapter!(BenchmarkAdapter(name="garamon_radical_inverse",
     baseline_execute=GaramonBenchN03.baseline_execute,
     baseline_name="garamon_julia_general_inverse",
     oracle=GaramonBenchN03.oracle,
-    contract="owned exact rational inverse in a diagonal metric with one radical coordinate",
+    contract="owned exact rational inverse in a diagonal metric with one or two radical coordinates",
     capabilities=Dict("exact_oracle"=>"independent Chevalley word action and Gauss-Jordan",
-        "metric"=>"diagonal signed with one zero diagonal coordinate",
-        "radical_corank"=>1,"gpu_kernel"=>false));replace=true)
+        "metric"=>"diagonal positive or signed nonradical part and exact zero radical coordinates",
+        "baseline_scope"=>"ordinary inverse in the complete active coordinate subalgebra, at most five axes",
+        "gpu_kernel"=>false));replace=true)

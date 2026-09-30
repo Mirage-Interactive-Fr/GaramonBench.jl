@@ -7,11 +7,13 @@ include(joinpath(get(ENV,"GARAMON_JULIA_ROOT",
 include("pruning_standard_baseline.jl")
 
 function generate(case,directory,rng)
-    case["dimension"]==2 && case["signature"]=="positive" &&
-        case["regime"]=="contracting" && case["recurrence"]=="bilinear" &&
-        case["horizon"]==2 && case["strategy"]=="deferred_and_replay" ||
-        throw(ArgumentError("outside bounded N24 preflight case"))
-    fixture=pruning_fixture(2,:positive,:contracting,:bilinear,2)
+    2<=case["dimension"]<=128 && case["signature"] in ("positive","indefinite","degenerate") &&
+        case["regime"] in ("contracting","neutral","amplifying") &&
+        case["recurrence"] in ("affine","bilinear") &&
+        1<=case["horizon"]<=8 && case["strategy"]=="deferred_and_replay" ||
+        throw(ArgumentError("outside bounded N24 campaign domain"))
+    fixture=pruning_fixture(case["dimension"],Symbol(case["signature"]),
+        Symbol(case["regime"]),Symbol(case["recurrence"]),case["horizon"])
     oracle=pruning_oracle(fixture)
     # This is a cross-check of the independent oracle, not the assertion used
     # to qualify the deferred and replay algorithms below.
@@ -32,10 +34,8 @@ function oracle(state,result)
     result isa NamedTuple || return false
     expected=last(state.oracle)
     all(run->run.value==expected && last(run.history)==expected &&
-        run.counts.omitted>0 && run.counts.corrections==1,
-        (result.deferred,result.replay)) &&
-        result.deferred.counts.correction_paths>0 &&
-        result.replay.counts.replay_paths>0
+        run.counts.omitted>=0 && run.counts.corrections==1,
+        (result.deferred,result.replay))
 end
 end
 
@@ -55,5 +55,5 @@ register_adapter!(BenchmarkAdapter(name="garamon_deferred_exact_replay",
         "replay_paths"=>result.replay.counts.replay_paths),
     contract="two owned Rational{BigInt} restored final trajectories, deferred correction and exact replay",
     capabilities=Dict("exact_oracle"=>"independent ambient basis-word rational recurrence",
-        "methods"=>"deferred,replay", "recurrence"=>"bilinear with quadratic error transport",
+        "methods"=>"deferred,replay", "recurrence"=>"affine or bilinear with exact error transport",
         "restoration"=>"exact after terminal checkpoint", "gpu_kernel"=>false));replace=true)

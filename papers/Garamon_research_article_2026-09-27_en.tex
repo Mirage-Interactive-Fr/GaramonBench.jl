@@ -365,6 +365,13 @@ directions and mapped back. A general linear subspace needs a valid
 change of basis and must account for its conditioning and support
 expansion.
 
+The registered factored-blade campaign transforms a decomposable bivector
+with one to eight nonnull reflections, over repeated episodes and seeded
+coefficient signs. Every grade-two coefficient is requested. Its oracle
+uses coordinate reflections and minors; the ordinary-product baseline
+expands the blade and performs the complete ordered sandwich. Intermediate
+grades have an explicit expansion budget and are never discarded.
+
 \techniqueplot{17}{Factored blades and versors}{Factor count, expansion, and complete transformation episodes.}
 \techniqueplot{18}{Active coordinate subspace}{Ambient versus active dimension, certification, embedding, and fallback.}
 
@@ -378,6 +385,15 @@ radix trees trade preparation and memory for support lookup and
 prefix sharing~\cite{art}. These structures are candidates when a
 long workload reuses topology. Their setup, updates, node count,
 and conversion back to the requested output must be measured.
+
+For the full-output tensor-train experiment, dimensions two through eight
+permit an independent enumeration of every input blade pair. This is an
+oracle and output-domain bound, rather than a claimed limit of tensor-train
+arithmetic. The weighted diagram embeds fixed supports into dimensions
+up to 128; its requested masks contain every reachable XOR output. The
+materialized-trie wedge uses the same complete reachable-output principle,
+with a 64-dimensional bound from its unsigned machine-word masks. Reuse
+horizons and input signs vary independently of ambient dimension.
 
 \techniqueplot{19}{Exact tensor train}{Certified rank, contraction, reconstruction, and peak memory.}
 \techniqueplot{20}{Weighted zero-suppressed diagram}{Build time, shared nodes, exact product, and output expansion.}
@@ -448,7 +464,7 @@ is drawn before the dedicated-machine measurements.
 
 \techniqueplot{31}{Binary support rank}{Ambient dimension, compressed rank, cocycle preparation, and complete episode.}
 \techniqueplot{32}{Invariant sectors}{Certificate, sector products, recomposition, and exact fallback.}
-\techniqueplot{K1}{Compact rank and workspace combination}{Four exact routes compared across dimension shards and reuse horizons.}
+\techniqueplot{K1}{Compact rank and workspace combination}{Compact-rank workspace episodes and the ordinary full-product baseline across dimensions and reuse horizons.}
 
 \section{Exact product paths and preparation}
 \subsection{Traversal, grade filtering, and joins}
@@ -673,6 +689,15 @@ Disk-cache integrity is checked during verification and cleanup, outside
 the timed product call. Fresh-state diagnostics include repeated native
 catalogue construction in their setup budget.
 
+The registered catalogue trains a full-support EGA3 kernel. Separate
+requests reuse that known algebra, introduce an untrained four-dimensional
+metric and support, or alternate several untrained contexts. Request
+indices and horizons vary; preprocessing and native-cache construction
+precede a fresh resident process, and execution returns owned coefficient
+matrices. The ordinary-product baseline receives the identical sequence
+of metrics, supports and coefficient updates. The trained catalogue is
+deliberately finite and does not cover arbitrary dimensions.
+
 \techniqueplot{14}{Just-in-time product generation}{Generation, compilation, code size, first use, and warm use.}
 \techniqueplot{15}{Precompilation catalogue}{Build, disk size, fresh-process reload, first use, and total episode.}
 
@@ -686,6 +711,14 @@ membership in the radical. The calculation must preserve
 multiplication order and the inverse's domain; failed
 certification triggers a general route or an explicit rejection.
 
+The inverse campaign varies radical size, active nonradical coordinates,
+coefficient phase and ambient dimension. The exact oracle solves the full
+active left-regular system by independent Gauss--Jordan elimination.
+Ordinary Garamon.jl general inversion supports at most five coordinates;
+larger ambient cases therefore use that ordinary inverse in the exactly
+isomorphic active coordinate subalgebra and embed its complete answer
+back. This baseline scope must accompany any reported timing.
+
 \techniqueplot{33}{Radical nilpotence}{Certificate, finite-series preparation, inverse, and fallback by radical size.}
 
 If an element satisfies a certified short polynomial identity,
@@ -694,6 +727,14 @@ through that identity while the same element and metric remain in
 force. Testing the identity on a few sample coefficients is not a
 certificate. The time to construct and revalidate it must be
 amortized across the declared reuse horizon.
+
+The power experiment varies exponent, repeated-call horizon, metric,
+element shape and whether coefficients remain stable. A refused
+scalar-square certificate invokes exact binary powering. The scalar-chain
+experiment varies even chain length and ambient dimension while retaining
+a small active vector span for a tractable full-grade oracle. The shared
+Pfaffian workspace alternates identical and changed pools, making numeric
+cache invalidation part of the episode rather than assuming constant data.
 
 \techniqueplot{34}{Short polynomial identity}{Certification and exact powers or recurrences across exponents and horizons.}
 

@@ -21,29 +21,58 @@ function wz20_oracle(a,b,g)
 end
 
 function wz20_generate(case,directory,rng)
-    case["dimension"]==4 && case["signature"]=="signed_degenerate" &&
+    n=case["dimension"]
+    4<=n<=128 && case["signature"]=="signed_degenerate" &&
         case["strategy"]=="weighted_zdd_product" ||
         throw(ArgumentError("outside bounded weighted ZDD preflight case"))
     Q=Rational{BigInt}
-    g=Q[2,-1,0,3]
+    g=Q[[2,-1,0,3][mod1(i,4)] for i in 1:n]
     a=Dict{BigInt,Q}(0=>1,1=>2,2=>-1,3=>1,8=>2,9=>-2,12=>1)
     b=Dict{BigInt,Q}(0=>-1,1=>3,2=>2,3=>-1,4=>1,8=>1,10=>-2)
+    coordinates=[1,2,n-1,n]
+    embed(mask)=sum((big(1)<<(coordinates[i]-1) for i in 1:4
+        if !iszero(mask & (big(1)<<(i-1))));init=big(0))
+    a=Dict(embed(mask)=>value for (mask,value) in a)
+    b=Dict(embed(mask)=>value for (mask,value) in b)
+    horizon=get(case,"horizon",1)
+    1<=horizon<=32 || error("weighted ZDD horizon budget")
+    if haskey(case,"horizon")
+        a=Dict(mask=>value*rand(rng,(-1,1)) for (mask,value) in sort!(collect(a);by=first))
+        b=Dict(mask=>value*rand(rng,(-1,1)) for (mask,value) in sort!(collect(b);by=first))
+    end
+    targets=sort!(unique(BigInt[xor(a,b) for a in keys(a) for b in keys(b)]))
     expected=wz20_oracle(a,b,g)
-    (;g,a,b,expected)
+    (;n,g,a,b,expected,targets,horizon)
 end
 
 function wz20_prepare(fixture,case,directory)
-    left=weighted_zdd(4,fixture.a;max_nodes=4096,max_work=10_000)
-    right=weighted_zdd(4,fixture.b;max_nodes=4096,max_work=10_000)
+    left=weighted_zdd(fixture.n,fixture.a;max_nodes=32768,max_work=1_000_000)
+    right=weighted_zdd(fixture.n,fixture.b;max_nodes=32768,max_work=1_000_000)
     weighted_zdd_terms(left)==fixture.a && weighted_zdd_terms(right)==fixture.b ||
         error("weighted ZDD input encoding disagrees")
     (;fixture,left,right)
 end
 
-function wz20_execute(state)
+function wz20_once(state)
     product=weighted_zdd_product(state.left,state.right,state.fixture.g;
-        max_nodes=4096,max_work=10_000)
-    weighted_zdd_terms(product;max_terms=16)
+        max_nodes=32768,max_work=1_000_000)
+    weighted_zdd_terms(product;max_terms=length(state.fixture.targets))
+end
+
+wz20_execute(state)=state.fixture.horizon==1 ? wz20_once(state) :
+    [wz20_once(state) for _ in 1:state.fixture.horizon]
+
+function wz20_baseline_once(state)
+    product=geometric_product(state.left,state.right)
+    Q=Rational{BigInt}
+    result=Dict{BigInt,Q}()
+    # A diagonal product can only produce XORs of actual input masks.
+    # Enumerating these is complete and avoids scanning 2^ambient_dimension.
+    for mask in state.fixture.targets
+        value=Q(coefficient_mask(product,mask))
+        iszero(value) || (result[mask]=value)
+    end
+    result
 end
 
 register_adapter!(BenchmarkAdapter(name="garamon_weighted_zdd",
@@ -59,19 +88,12 @@ register_adapter!(BenchmarkAdapter(name="garamon_weighted_zdd",
             left=multivector(ga,f.a;storage=:sparse),
             right=multivector(ga,f.b;storage=:sparse))
     end,
-    baseline_execute=state->begin
-        product=geometric_product(state.left,state.right)
-        Q=Rational{BigInt}
-        result=Dict{BigInt,Q}()
-        for mask in 0:(1<<length(state.fixture.g))-1
-            value=Q(coefficient_mask(product,mask))
-            iszero(value) || (result[BigInt(mask)]=value)
-        end
-        result
-    end,
+    baseline_execute=state->state.fixture.horizon==1 ? wz20_baseline_once(state) :
+        [wz20_baseline_once(state) for _ in 1:state.fixture.horizon],
     baseline_name="garamon_julia_sparse_direct_product",
-    oracle=(state,result)->result isa Dict{BigInt,Rational{BigInt}} &&
-        result==state.fixture.expected,
+    oracle=(state,result)->state.fixture.horizon==1 ?
+        result isa Dict{BigInt,Rational{BigInt}} && result==state.fixture.expected :
+        length(result)==state.fixture.horizon && all(==(state.fixture.expected),result),
     contract="owned exact rational complete product extracted from a coefficient ZDD",
     capabilities=Dict("exact_oracle"=>"independent ambient Clifford-word inversions",
         "algorithm"=>"memoized ZDD branch product with signed metric factors",

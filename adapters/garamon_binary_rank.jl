@@ -20,7 +20,7 @@ end
 
 function br31_generate(case, directory, rng)
     n = case["dimension"]
-    n in (5,65,129) || error("binary-rank fixture dimension budget")
+    2 <= n <= 129 || error("binary-rank fixture dimension budget")
     strategy = case["strategy"]
     strategy in ("rank", "direct") || error("binary-rank strategy")
     signature = case["signature"]

@@ -5,6 +5,8 @@ using GaramonBench, Garamon, Random, SHA
 include(joinpath(get(ENV, "GARAMON_JULIA_ROOT",
     joinpath(homedir(), ".julia", "dev", "Garamon")),
     "perf", "precompile_lifecycle.jl"))
+include(joinpath(get(ENV,"GARAMON_JULIA_ROOT",joinpath(homedir(),".julia","dev","Garamon")),
+    "perf","precompile_lifecycle_kernel.jl"))
 
 function pc15_reference()
     # EGA3 known catalogue input, duplicated independently of the kernel.
@@ -35,15 +37,23 @@ function pc15_cache_map(depot)
 end
 
 function pc15_generate(case, directory, rng)
-    case["dimension"] == 3 && case["scenario"] == "known" &&
-        case["strategy"] == "generated" ||
-        error("precompilation catalogue smoke contract")
+    scenario=case["scenario"]
+    scenario in ("known","late","changing") && case["strategy"]=="generated" ||
+        error("precompilation catalogue scenario contract")
+    case["dimension"]==(scenario=="known" ? 3 : 4) || error("catalogue dimension/scenario contract")
+    horizon=get(case,"horizon",1);1<=horizon<=32 || error("catalogue horizon budget")
+    index=get(case,"request_index",1);1<=index<=12 || error("catalogue request index budget")
+    indices=scenario=="known" ? [0] : scenario=="late" ? [index] : collect(index:index+2)
+    trace=haskey(case,"horizon")
+    fixtures=[lifecycle_fixture(i) for i in indices]
+    expected=trace ? hcat((lifecycle_reference(fixtures[mod1(t,length(fixtures))],
+        t+fld(t-1,length(fixtures))) for t in 1:horizon)...) : pc15_reference()
     # Native PerfChecker workers intentionally have a small diagnostic
     # environment. The target's dependencies belong to the campaign closure.
     manifest=joinpath(dirname(dirname(pathof(GaramonBench))),"Manifest.toml")
     environment = lifecycle_environment(joinpath(directory, "catalogue"), true;
         dependency_manifest=manifest)
-    (; environment, expected=pc15_reference())
+    (;environment,expected,indices,horizon,trace)
 end
 
 function pc15_build(generated, case, directory)
@@ -94,6 +104,22 @@ function pc15_prepare(built, case, directory)
             flush(stdout)
         end
         """
+    if built.trace
+        expression="""
+            using GaramonLifecycle
+            fixtures=Any[GaramonLifecycle.lifecycle_fixture(i) for i in $(built.indices)]
+            artifacts=Any[GaramonLifecycle.lifecycle_artifact(
+                GaramonLifecycle.lifecycle_plan(f),f,:generated) for f in fixtures]
+            ready=precompile(GaramonLifecycle.lifecycle_trace,
+                (typeof(fixtures),typeof(artifacts),Symbol,Int))
+            println("READY ",ready);flush(stdout)
+            for request in eachline(stdin)
+                request=="RUN" || error("unknown catalogue worker request")
+                result=GaramonLifecycle.lifecycle_trace(fixtures,artifacts,:generated,$(built.horizon))
+                println(join(vec(result),','));flush(stdout)
+            end
+            """
+    end
     command = `$(Base.julia_cmd()) --startup-file=no --threads=1 --compiled-modules=yes --pkgimages=yes --project=$(environment.package) -e $expression`
     process = open(addenv(command, environment.env), "r+")
     try
@@ -118,7 +144,7 @@ function pc15_execute(state)
     println(state.process, "RUN")
     flush(state.process)
     output = parse.(Float64, split(readline(state.process), ','))
-    output
+    state.trace ? reshape(output,16,state.horizon) : output
 end
 
 function pc15_cleanup(state)
@@ -140,6 +166,9 @@ function pc15_oracle(state, result)
 end
 
 function pc15_baseline_prepare(state)
+    if state.trace
+        return (;fixtures=[lifecycle_fixture(i) for i in state.indices],horizon=state.horizon)
+    end
     ga=algebra(3,:ega)
     left=multivector(ga,Dict(UInt64(i)=>Float64(1+mod(i+1,3))
         for i in 0:7);storage=:dense)
@@ -148,7 +177,19 @@ function pc15_baseline_prepare(state)
     (;left,right)
 end
 
-pc15_baseline_execute(state)=dense(geometric_product(state.left,state.right)).values
+function pc15_baseline_execute(state)
+    if hasproperty(state,:fixtures)
+        output=zeros(Float64,16,state.horizon)
+        for t in 1:state.horizon
+            fixture=state.fixtures[mod1(t,length(state.fixtures))]
+            lifecycle_update!(fixture,t+fld(t-1,length(state.fixtures)))
+            result=geometric_product(fixture.a,fixture.b)
+            for (mask,value) in result.values;output[Int(mask)+1,t]=value;end
+        end
+        return output
+    end
+    dense(geometric_product(state.left,state.right)).values
+end
 
 register_adapter!(BenchmarkAdapter(name="garamon_precompile_catalogue",
     generate=pc15_generate, build=pc15_build, prepare=pc15_prepare,
@@ -156,7 +197,7 @@ register_adapter!(BenchmarkAdapter(name="garamon_precompile_catalogue",
     baseline_prepare=pc15_baseline_prepare,
     baseline_execute=pc15_baseline_execute,
     baseline_name="garamon_julia_direct_geometric_product",
-    contract="owned Float64 vector of all EGA3 generated-product coefficients",
+    contract="owned Float64 coefficients of complete known or dynamic catalogue product episodes",
     capabilities=Dict("exact_oracle"=>"independent Int64 Clifford-word inversions",
         "precompilation"=>"native catalogue cache in disposable isolated depot",
         "loading_jit"=>"Base.require plus explicit generated-execution specialization",

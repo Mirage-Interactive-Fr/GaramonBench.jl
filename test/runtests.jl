@@ -19,6 +19,7 @@ include("egraph_oracle_preflight.jl")
 include("bilinear_oracle_preflight.jl")
 include("bench_cleanup.jl")
 include("paired_baseline.jl")
+include("campaign_variants.jl")
 
 @testset "article distinguishes preflight cards from qualified results" begin
     source=joinpath(pkgdir(GaramonBench),"papers",
