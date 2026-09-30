@@ -43,9 +43,14 @@ Then:
 
 ~~~julia
 using GaramonBench
-bench(campaign=:techniques, isolated=true,
-      output="/data/garamonbench/run-001")
+bench(campaign=:techniques, isolated=true)
 ~~~
+
+The default output is `~/.julia/dev/GaramonBench/data/garamonbench/techniques-dedicated-001`
+when installed with `Pkg.develop`. No system directory or administrator
+privileges are required. To use another writable location, pass
+`output=joinpath(homedir(), "garamonbench", "run-001")` and reuse that exact
+path when resuming.
 
 The controller selects native environments and thread counts automatically.
 The current registry uses one thread for ordinary routes, four threads for
@@ -64,7 +69,7 @@ needed. Inspect `technique_launch_plan()` to see the groups without running.
 For a correctness-only screen of the launcher:
 
 ~~~julia
-run_technique_campaign("/data/garamonbench/preflight-001";
+run_technique_campaign(joinpath(pkgdir(GaramonBench), "data", "garamonbench", "preflight-001");
                        phase=:preflight, ids=["01", "27", "29"])
 ~~~
 
@@ -119,12 +124,12 @@ their own campaigns provide qualified data.
 To place data on a dedicated volume:
 
 ~~~julia
-bench(output="/data/garamonbench/run-001", isolated=true)
+bench(output=joinpath(homedir(), "garamonbench", "run-001"), isolated=true)
 ~~~
 
 `bench()` keeps every raw sample, source snapshot, preflight archive and
 intermediate by default. To remove only unfinished staging contents after a
-completed run, use `bench(output="/data/garamonbench/run-001",
+completed run, use `bench(output=joinpath(homedir(), "garamonbench", "run-001"),
 isolated=true, cleanup=:temporary)`. To retain only the verified CSV summary,
 figure, article PDF and their hashes, use `cleanup=:paper`. The same option
 can be supplied when resuming an already completed run; completed cases are
@@ -134,7 +139,7 @@ returns its verified final results without trying to recreate deleted cases.
 The cleanup operation is also available separately:
 
 ~~~julia
-cleanup_bench_data("/data/garamonbench/run-001"; mode=:paper)
+cleanup_bench_data(joinpath(homedir(), "garamonbench", "run-001"); mode=:paper)
 ~~~
 
 `:paper` removes the preflight and benchmark archives only after checking the
