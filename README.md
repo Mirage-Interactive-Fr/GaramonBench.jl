@@ -30,6 +30,57 @@ Garamon.jl and GaramonBench.jl development checkouts belong under
 ~/.julia/dev. Set GARAMON_JULIA_ROOT only when a different local Garamon.jl
 checkout is intentionally used.
 
+## Launch the complete technique campaign
+
+On the dedicated machine, use Julia 1.13 and launch the controller with
+automatic threads:
+
+~~~sh
+julia --startup-file=no -t auto --project="$HOME/.julia/dev/GaramonBench"
+~~~
+
+Then:
+
+~~~julia
+using GaramonBench
+bench(campaign=:techniques, isolated=true,
+      output="/data/garamonbench/run-001")
+~~~
+
+The controller selects native environments and thread counts automatically.
+The current registry uses one thread for ordinary routes, four threads for
+route 27, and the CUDA environment for route 29. The controller's `-t auto`
+does not change these declared measurement protocols. Groups run sequentially
+to avoid competing benchmark workloads. BLAS and OpenMP subprocesses use one
+thread. Each archive records the actual Julia threads, worker identity, machine
+and environment. The process route creates and removes its own Julia worker.
+
+`gpu=:auto` checks CUDA and explicitly records a skipped GPU route if no
+functional device is present. Use `gpu=:required` to require GPU coverage,
+or `gpu=:off` for a CPU-only campaign. Optional GPU dependencies are installed
+before measuring any group. No manual activation of the CUDA environment is
+needed. Inspect `technique_launch_plan()` to see the groups without running.
+
+For a correctness-only screen of the launcher:
+
+~~~julia
+run_technique_campaign("/data/garamonbench/preflight-001";
+                       phase=:preflight, ids=["01", "27", "29"])
+~~~
+
+The complete benchmark performs a minimal preflight first. It does not repeat
+the preparation machine's PerfChecker optimization pass. `phase=:profiles`
+is available separately when profiling is explicitly requested.
+
+Press Ctrl-C to stop. Repeat the same `bench` call with the same output path
+to resume; validated cases and shared baselines are checked and skipped.
+ProgressMeter displays each active route's count and ETA. The controller
+records stage completion in `launch-progress.toml`; each route retains its
+own detailed checkpoint. Keep the same sources, settings and machine when
+resuming. By default all raw data are retained. Qualified figures and the
+article update after each completed route; `article_every_cases=100` enables
+intermediate updates during longer routes.
+
 ## Run and resume the EGA3 comparison
 
 From Julia:
@@ -38,6 +89,9 @@ From Julia:
 using GaramonBench
 bench()
 ~~~
+
+`bench()` without `campaign=:techniques` retains the separate EGA3
+whole-library comparison described here.
 
 This runs an oracle preflight and then measures the same EGA3 vector-product
 requests with Garamon.jl, GAL, and Versor. The resulting whole-library

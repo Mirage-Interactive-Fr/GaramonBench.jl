@@ -179,7 +179,16 @@ skips completed cases.
 """
 function bench(; output::Union{Nothing,AbstractString}=nothing,
     isolated::Bool=false,cleanup::Symbol=:keep,
-    show_progress::Bool=true)
+    show_progress::Bool=true,campaign::Symbol=:external,
+    ids=String[],gpu::Symbol=:auto,article_every_cases::Int=0)
+    campaign in (:external,:techniques) || throw(ArgumentError("campaign must be :external or :techniques"))
+    if campaign==:techniques
+        isolated || throw(ArgumentError("the technique benchmark requires isolated=true on the dedicated machine"))
+        cleanup==:keep || throw(ArgumentError("technique campaigns currently retain their auditable raw archives"))
+        destination=isnothing(output) ? DrWatson.datadir(joinpath(dirname(@__DIR__),
+            "data","garamonbench","techniques-dedicated-001")) : abspath(expanduser(output))
+        return run_technique_campaign(destination;ids,gpu,show_progress,article_every_cases)
+    end
     cleanup in (:keep,:temporary,:paper) ||
         throw(ArgumentError("cleanup must be :keep, :temporary, or :paper"))
     destination = isnothing(output) ? DrWatson.datadir("garamonbench", "external-ga-vectors",
@@ -281,4 +290,111 @@ function bench(; output::Union{Nothing,AbstractString}=nothing,
         benchmark=cleanup==:paper ? nothing : benchmark_output,
         summary_csv, figure_pdf, article_pdf,
         medians_ns=medians)
+end
+
+"""Plan native environments and thread counts without running or saving anything.
+The controller may use `-t auto`; measurements use their declared protocol.
+"""
+function technique_launch_plan(;ids=String[],gpu::Symbol=:auto)
+    gpu in (:auto,:required,:off) || throw(ArgumentError("gpu must be :auto, :required or :off"))
+    rows=technique_smoke_plan()
+    requested=Set(ids)
+    isempty(requested) || issubset(requested,Set(r["id"] for r in rows)) || error("unknown technique ID")
+    selected=isempty(requested) ? rows : filter(r->r["id"] in requested,rows)
+    groups=Dict{Tuple{String,Int},Vector{String}}()
+    for row in selected
+        row["environment"]=="gpu" && gpu==:off && continue
+        push!(get!(groups,(row["environment"],row["threads"]),String[]),row["id"])
+    end
+    [(environment=key[1],threads=key[2],ids=groups[key],
+        project=normpath(joinpath(dirname(@__DIR__),key[1])))
+        for key in sort!(collect(keys(groups));by=k->(k[1]=="gpu",k[2]))]
+end
+
+function _technique_launch_command(group,output,phase,show_progress,article_every_cases)
+    code="""
+    using GaramonBench, TOML
+    phase, output, progress, every = ARGS[1:4]
+    ids = ARGS[5:end]
+    preflight = joinpath(output, "preflight")
+    report = phase == "preflight" ? run_technique_smoke(preflight; ids) :
+        phase == "profiles" ? run_technique_profiles(preflight, joinpath(output, "profiles"); ids) :
+        run_technique_bench(preflight, joinpath(output, "benchmark"); ids,
+            show_progress=progress=="true", article_every_cases=parse(Int,every))
+    records = TOML.parsefile(report)["technique"]
+    selected = filter(r->r["id"] in ids, records)
+    expected = phase == "preflight" ? "oracle_passed" : phase == "profiles" ? "captured" : "complete"
+    length(selected)==length(ids) && all(r->r["status"]==expected,selected) ||
+        error("native stage incomplete; inspect "*report)
+    phase == "benchmark" && !all(r->get(r,"article_status","")=="updated",selected) &&
+        error("benchmark cases retained but article update incomplete; inspect "*report)
+    println("Stage complete: ",phase,"; ",join(ids,", "))
+    """
+    julia=joinpath(Sys.BINDIR,Base.julia_exename())
+    args=[julia,"--startup-file=no","--threads="*string(group.threads)*",0",
+        "--gcthreads=1","--project="*group.project,"-e",code,
+        string(phase),abspath(output),string(show_progress),string(article_every_cases)]
+    append!(args,group.ids)
+    addenv(Cmd(args),"OPENBLAS_NUM_THREADS"=>"1","OMP_NUM_THREADS"=>"1")
+end
+
+"""Run reproducible native groups sequentially, with automatic environment and
+thread selection. Ctrl-C retains validated cases; repeat the same output path
+to resume. `phase=:preflight` performs no timings; `:profiles` adds bounded
+PerfChecker captures; `:benchmark` prepares and runs dedicated-machine grids.
+"""
+function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
+        phase::Symbol=:benchmark,show_progress::Bool=true,
+        article_every_cases::Int=0)
+    phase in (:preflight,:profiles,:benchmark) || throw(ArgumentError("invalid campaign phase"))
+    article_every_cases>=0 || throw(ArgumentError("article_every_cases must be nonnegative"))
+    VERSION>=v"1.13" || error("Julia 1.13 or later is required")
+    groups=technique_launch_plan(;ids,gpu)
+    destination=abspath(expanduser(output))
+    mkpath(destination)
+    _resume_lock(destination) do
+        julia=joinpath(Sys.BINDIR,Base.julia_exename())
+        # Instantiate every selected environment before measurements, so a
+        # later GPU setup cannot change the source fingerprint of a CPU run.
+        for project in unique(g.project for g in groups)
+            run(`$julia --startup-file=no --threads=1,0 --project=$project -e "using Pkg; Pkg.instantiate()"`)
+        end
+        gpu_status=gpu==:off ? "disabled" : "not_requested"
+        if any(g->g.environment=="gpu",groups)
+            project=normpath(joinpath(dirname(@__DIR__),"gpu"))
+            probe_code="using CUDA; exit(CUDA.functional() ? 0 : 2)"
+            available=success(run(ignorestatus(`$julia --startup-file=no --threads=1,0 --project=$project -e $probe_code`)))
+            gpu_status=available ? "available" : "unavailable"
+            !available && gpu==:required && error("GPU required, but CUDA is not functional")
+            if !available
+                println("GPU unavailable: route 29 is recorded as skipped.")
+                filter!(g->g.environment!="gpu",groups)
+            end
+        end
+        records=Dict{String,Any}[]
+        stages=phase==:preflight ? [:preflight] : [:preflight,phase]
+        report=joinpath(destination,"launch-progress.toml")
+        function save(status)
+            _resume_write(report,Dict("status"=>status,"phase"=>string(phase),
+                "gpu_status"=>gpu_status,"controller_threads"=>Threads.nthreads(),
+                "logical_cpus"=>Sys.CPU_THREADS,"updated_utc"=>string(now(UTC)),
+                "groups"=>records))
+        end
+        save("running")
+        try
+            for stage in stages, group in groups
+                println("Stage ",stage,"; threads=",group.threads,
+                    "; environment=",group.environment,"; routes=",join(group.ids,", "))
+                run(_technique_launch_command(group,destination,stage,show_progress,article_every_cases))
+                push!(records,Dict("stage"=>string(stage),"environment"=>group.environment,
+                    "threads"=>group.threads,"ids"=>group.ids,"status"=>"complete"))
+                save("running")
+            end
+            save(gpu_status=="unavailable" ? "complete_gpu_skipped" : "complete")
+        catch
+            save("interrupted")
+            rethrow()
+        end
+        report
+    end
 end

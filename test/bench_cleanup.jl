@@ -68,6 +68,24 @@ using Test, TOML, GaramonBench
     @test_throws ArgumentError cleanup_bench_data("/tmp";mode=:invalid)
 end
 
+@testset "native technique launcher preserves registered thread protocols" begin
+    groups=technique_launch_plan()
+    @test length(groups)==3
+    @test Set(vcat(getproperty.(groups,:ids)...))==Set(r["id"] for r in technique_smoke_plan())
+    @test only(filter(g->"27" in g.ids,groups)).threads==4
+    @test only(filter(g->"29" in g.ids,groups)).environment=="gpu"
+    @test all(g.threads==1 for g in groups if !("27" in g.ids))
+    @test all(g.environment!="gpu" for g in technique_launch_plan(gpu=:off))
+    @test length(technique_launch_plan(ids=["27"]))==1
+    @test_throws ArgumentError technique_launch_plan(gpu=:invalid)
+    @test_throws ErrorException technique_launch_plan(ids=["unknown"])
+    group=only(technique_launch_plan(ids=["27"]))
+    command=GaramonBench._technique_launch_command(group,"/tmp/benchmark","preflight",true,0)
+    @test "--threads=4,0" in command.exec
+    project_arg=only(filter(x->startswith(x,"--project="),command.exec))
+    @test samefile(project_arg[length("--project=")+1:end],pkgdir(GaramonBench))
+end
+
 @testset "technique article data use validated same-case baselines" begin
     mktempdir() do root
         archive=joinpath(root,"benchmark","28")
