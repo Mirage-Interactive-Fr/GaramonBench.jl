@@ -347,12 +347,26 @@ the multiplication sign, metric cocycle, ambient grade, and output
 queries. A basis of masks can have commuting or nilpotent generators
 that would be misrepresented by a naive compressed metric.
 
-An invariant sector is useful only when the requested operation
-preserves the sector or when all needed sectors can be recomposed.
-A projection chosen merely because intermediate coefficients appear
-small would discard contributions to a general exact product. Both
-binary-rank and sector routes therefore need construction
-certificates and a fallback on invalidation.
+The first implemented invariant-sector case is the eigenspace split of
+the grade involution \(\alpha(X)=\sum_k(-1)^k\langle X\rangle_k\).
+Writing \(X=X_++X_-\) for even and odd grades, the involution's
+automorphism property gives
+\(\langle AB\rangle_{\mathrm{even}}=A_+B_++A_-B_-\) and
+\(\langle AB\rangle_{\mathrm{odd}}=A_+B_-+A_-B_+\).
+Thus a requested parity uses two sector products, whereas a general
+product recomposes all four. This exact decomposition is distinct from
+discarding small intermediate coefficients; every contribution to the
+requested output remains present. The current implementation prepares
+the four structural plans for a repeated integer, diagonal-metric
+request, checks metric, basis and input supports on each call, and
+falls back to the full exact product when a certificate is invalid.
+The preparation and four-plan memory cost may outweigh the saved pair
+products, especially for short horizons. The campaign varies parity,
+dimension, signature, support, reuse horizon and invalidation, and
+compares prepared sectors with the direct exact route under the same
+independent signed-blade oracle. The underlying grading is standard
+Clifford-algebra structure~\cite{breuils2019}; no performance conclusion
+is drawn before the dedicated-machine measurements.
 
 \techniqueplot{31}{Binary support rank}{Ambient dimension, compressed rank, cocycle preparation, and complete episode.}
 \techniqueplot{32}{Invariant sectors}{Certificate, sector products, recomposition, and exact fallback.}

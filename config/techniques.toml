@@ -399,10 +399,14 @@ preflight_smoke = {dimension = 65, signature = "mixed", strategy = "rank", horiz
 [[technique]]
 id = "32"
 name = "invariant-sectors"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/sectors.jl"
+test = "test/sectors.jl"
 campaign = ""
+preflight_config = "config/invariant_sectors_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_invariant_sectors.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, mode = "prepared", output_parity = "even", regime = "stable", signature = "mixed", support = 3, horizon = 1}
 
 [[technique]]
 id = "33"
