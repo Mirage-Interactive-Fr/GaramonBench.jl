@@ -554,13 +554,33 @@ cache; changing vectors invalidate numeric contractions.
 \techniqueplot{35}{Pfaffian scalar chain}{Chain length, construction, contractions, reuse, and oracle-checked output.}
 \techniqueplot{K3}{Shared Pfaffian workspace}{Shared preparation versus separate exact scalar-chain calculations.}
 
-A cross-Gram matrix can certify or simplify certain blade scalar
-pairings. Its rank does not, by itself, identify every coefficient
-of a general geometric product. Fermionic Gaussian
-representations are similarly powerful only when inputs and
-operations preserve the Gaussian class. Both ideas are valuable
-because they change the representation of a certified special
-problem, and both require an exact fallback outside that class.
+A cross-Gram matrix addresses the scalar pairing of two
+decomposable, equal-grade blades, rather than all coefficients of a
+general geometric product. Let
+\(A=u_1\wedge\cdots\wedge u_k\) and
+\(B=v_1\wedge\cdots\wedge v_k\). The exterior-power pairing obeys
+\(\langle\widetilde A B\rangle_0=\det G\), where
+\(G_{ij}=\langle u_i,v_j\rangle\). Consequently
+\(\operatorname{rank}G<k\) is an exact zero certificate for this
+particular scalar request. The implemented route forms the contractions
+with arbitrary-precision integer arithmetic, computes rank and
+determinant by exact elimination, and stores the vectors and metric as
+the certificate. It checks those inputs on every call; changed vectors
+or metric trigger a complete exact recomputation. Scalar rescaling of
+the same blades can reuse the saved determinant. Grade is currently
+bounded by 16 and the metric is diagonal and integral. The independent
+pre-flight oracle evaluates the determinant by a permutation sum for
+grades two and three; separate algebra tests compare the result with
+the scalar part of the reversed-blade geometric product. The campaign
+varies dimension, grade, signature, rank regime, vector support,
+mutation and reuse horizon. Its cost accounting includes matrix
+construction and certificate validation. No rank claim is extended
+to unrelated coefficients or nondecomposable inputs.
+
+Fermionic Gaussian representations are similarly powerful only when
+inputs and operations preserve the Gaussian class. This separate
+proposal needs a class certificate and an exact fallback before it can
+be compared with general multivector products.
 
 \techniqueplot{36}{Cross-Gram rank}{Certified rank, pairing construction, selected scalar cost, and fallback.}
 \techniqueplot{37}{Fermionic Gaussian operators}{Class certification, closed operations, conversion, and fallback.}

@@ -447,10 +447,14 @@ preflight_smoke = {dimension = 3, chain_length = 4, strategy = "pfaffian", horiz
 [[technique]]
 id = "36"
 name = "cross-gram-rank"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/crossgram.jl"
+test = "test/crossgram.jl"
 campaign = ""
+preflight_config = "config/cross_gram_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_cross_gram.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, mode = "prepared", signature = "positive", grade = 2, rank_regime = "generic", vector_support = 2, mutation = "stable", horizon = 1}
 
 [[technique]]
 id = "37"
