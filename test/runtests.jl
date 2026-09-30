@@ -13,11 +13,13 @@ include("cross_gram_oracle_preflight.jl")
 include("fermionic_gaussian_oracle_preflight.jl")
 include("bench_cleanup.jl")
 
-@testset "article has empty result slots until a qualified run" begin
+@testset "article distinguishes preflight cards from qualified results" begin
     source=joinpath(pkgdir(GaramonBench),"papers",
         "Garamon_research_article_2026-09-27_en.tex")
     content=read(source,String)
     @test occursin("\\newcommand{\\pendingfigure}",content)
+    @test occursin("preflight_technique_#1.pdf",content)
+    @test occursin("Preflight validation only; no performance result.",content)
     @test occursin("qualified_ega3_vector_libraries.pdf",content)
     @test !occursin("\\addplot",content)
     @test !occursin("exploratory_",content)

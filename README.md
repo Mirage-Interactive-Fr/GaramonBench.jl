@@ -141,7 +141,9 @@ run_technique_profiles(preflight, joinpath(root, "profiles"))
 run_technique_bench(preflight, joinpath(root, "benchmark"))
 ~~~
 
-The smoke run checks one oracle case per registered route. Profiling captures
+The smoke run checks one oracle case per registered route. A passed case
+creates a vector validation card beside that method in the article, with no
+timing or speed claim. Profiling captures
 bounded PerfChecker diagnostics on that case. The benchmark runs the full
 parameter grid only after a matching smoke archive exists. Each route has its
 own resumable directory; completed cases are verified and skipped when the
@@ -151,8 +153,10 @@ select routes. Registry entries still marked `research` are reported as such
 and are not measured. Run CPU routes from the package environment with their
 registered thread count; GPU routes require the package's `gpu/` environment.
 Inspect `technique_bench_plan()` for route case counts before starting a large
-campaign. The article currently has 48 figure slots, one per registry entry;
-only qualified completed data from the dedicated machine may replace them.
+campaign. The article currently has 48 figure slots, one per registry entry.
+Preflight cards fill empty slots temporarily; only qualified completed
+performance data from the dedicated machine may replace them with benchmark
+figures.
 
 The configurations under config/ and adapters under adapters/ define
 oracle preflights, CPU and GPU routes, matched C++/Julia kernels, cache
@@ -182,6 +186,7 @@ archived source snapshots prevents a full historical integrity check, even
 when timing CSV files remain. Do not reuse timing samples from a different
 machine as if they were local measurements.
 
-The article's empty figure slots are deliberate. A plot is published only
-after its generating case set is qualified; old exploratory plots are never
+The article's unqualified performance slots are deliberate. Preflight cards
+report oracle coverage without timings. A performance plot is published only
+after its generating case set is qualified; exploratory timings are never
 inserted automatically into the manuscript.

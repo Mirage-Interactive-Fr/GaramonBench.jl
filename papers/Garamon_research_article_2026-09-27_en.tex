@@ -27,7 +27,20 @@
 \label{#4}
 \end{figure}}
 \newcommand{\techniqueplot}[3]{%
-\pendingfigure{plot_technique_#1.pdf}{#2}{#3}{fig:technique-#1}}
+\begin{figure}[H]
+\centering
+\IfFileExists{plot_technique_#1.pdf}{%
+\includegraphics[width=.88\linewidth]{plot_technique_#1.pdf}}{%
+\IfFileExists{preflight_technique_#1.pdf}{%
+\includegraphics[width=.88\linewidth]{preflight_technique_#1.pdf}}{%
+\fbox{\parbox[c][18mm][c]{.84\linewidth}{\centering
+\textbf{Awaiting dedicated benchmark data}\\[2mm]
+\small #2}}}}
+\IfFileExists{plot_technique_#1.pdf}{\caption{#3}}{%
+\IfFileExists{preflight_technique_#1.pdf}{%
+\caption{#3 Preflight validation only; no performance result.}}{\caption{#3}}}
+\label{fig:technique-#1}
+\end{figure}}
 \title{Toward Workload-Aware Geometric Algebra in Garamon.jl:\\
 Algorithms, Exactness Contracts, and a Reproducible Benchmark Protocol}
 \author{}
@@ -152,8 +165,10 @@ execution~\cite{garamonbench,drwatson}. The compatibility matrix in
 \path{config/compatibility_matrix.csv} records proposed pairwise
 compositions; \path{config/techniques.toml} gives their conditions.
 A matrix entry is a mathematical planning hypothesis, not a measured
-speedup. The benchmark article is under \path{papers/}; generated
-plots, data, and PDFs are excluded from Git.
+speedup. The benchmark article is under \path{papers/}; raw data,
+generated plots, and PDFs are excluded from Git. Qualified article
+tables and their provenance can be committed under
+\path{data/processed/garamonbench/}.
 
 \begin{table}[tbp]
 \centering\small
@@ -265,6 +280,49 @@ merely plot styling. Support topology, coefficients, metric,
 precision, output selection, and recurrence feedback are recorded
 per case. A complete output may be compared with a selected output
 only as two different tasks, not as an algorithmic speed ratio.
+
+The small dense scenario requests the full product in dimensions where
+all coefficients can fit in memory. Its purpose is to expose indexing,
+allocation, and output-writing costs rather than to reward a method for
+omitting requested coefficients. The sparse ambient scenario keeps the
+number of active blades small while varying ambient dimension and the
+distance between their indices. It tests whether a method pays for the
+ambient algebra or only for the active support. Homogeneous and targeted
+requests are separate scenarios because their output contracts differ;
+each is paired only with a standard route that returns the same requested
+quantity.
+
+Reuse scenarios range from one call to long episodes with fixed metric
+and supports but changing coefficients. Another episode alternates
+support topologies or algebras. The first tests amortization of plans,
+workspaces, generated code, and cached indices. The second tests
+invalidation, cache admission, and the cost of preparing a route that
+may never be reused. Recurrences add feedback between calls and require
+the output of one step to become the exact input of the next; replay and
+approximate methods therefore receive their own error contract.
+
+Metric scenarios distinguish positive diagonal, mixed signature,
+degenerate, and general symmetric forms. An algorithm specialized to a
+diagonal metric must include any change-of-basis and reconstruction
+cost when compared with a direct general-metric calculation. Parallel
+scenarios vary batch length, CPU thread or process count, GPU residency,
+transfer frequency, and output ownership. The complete episode and the
+warm kernel are reported separately so that an advantage in one is not
+silently attributed to the other.
+
+For every comparable strategy, the campaign must measure a standard
+Garamon.jl route on exactly the same generated requests and checks both
+outputs. Standard Garamon C++ is an additional baseline where it can
+perform the same mathematical task. A speed ratio is left undefined when
+the standard route cannot finish within the declared resource budget.
+Alternative complete execution routes may share one figure and one
+baseline; composable techniques are evaluated in separate interaction
+experiments rather than presented as mutually exclusive choices.
+After a paired pilot, a route that remains roughly an order of magnitude
+slower than the standard route may stop its sweep within that workload
+regime. The threshold and all censored cases are recorded. This local
+stopping decision does not exclude the route at other dimensions, reuse
+horizons, output contracts, or devices.
 
 \section{Representation, indexing, and locality}
 \subsection{Dense, sparse, and grade-block forms}
@@ -815,12 +873,12 @@ process snapshots; earlier local data under competing workloads
 are not mixed with the dedicated campaign.
 
 \subsection{Comparability and publication}
-A C++/Julia speed comparison is made only when both sides use
-the same strategy, algebra, input and output layouts, precision
-rules, accumulation order where required, and preparation
-boundary. A native C++ generator product with a different
-representation can still be described as a whole-library
-comparison, but it cannot isolate language overhead. Other GA
+A causal C++/Julia language comparison requires the same strategy,
+algebra, input and output layouts, precision rules, accumulation order
+where required, and preparation boundary. Standard C++ and Julia routes
+can also serve as application-level baselines for a new strategy when
+they answer the same request on the same inputs; such a comparison does
+not isolate language overhead. Other GA
 libraries receive the same mathematical scenario and independent
 oracle; their different internal strategies are stated.
 Compile flags, Julia flags, bounds-check settings, CPU affinity,
@@ -832,9 +890,10 @@ before it is skipped on restart; interruption does not require
 rerunning validated cases. Raw samples and qualification reports
 remain distinct from derived CSV summaries and article plots.
 The benchmark machine receives the package and starts a fresh
-archive. If a figure is absent, the manuscript shows the
-explicit empty slot beside the corresponding method. It never inserts local screening
-numbers as a substitute for the dedicated run.
+archive. If a performance figure is absent, the manuscript shows a
+validation-only preflight card when a matching oracle archive exists,
+or an explicit empty slot otherwise. The preflight card reports no time
+or ranking and is replaced only by qualified dedicated-machine results.
 
 \section{Discussion and conclusion}
 The proposed palette is useful only if admission checks connect

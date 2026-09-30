@@ -377,6 +377,13 @@ function run_technique_smoke(output;ids=String[])
             Dict("scope"=>"one representative case per registered technique; not full P1",
                 "updated_utc"=>string(now(UTC)),"technique"=>ordered,
                 "oracle_passed_count"=>count(r->r["status"]=="oracle_passed",ordered)))
+        if result["status"]=="oracle_passed"
+            try
+                Base.invokelatest(_refresh_technique_preflight_article,row,output)
+            catch exception
+                @warn "Preflight passed but the article card could not be refreshed" id=row["id"] exception
+            end
+        end
     end
     report
 end

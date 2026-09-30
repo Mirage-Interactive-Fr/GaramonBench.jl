@@ -102,6 +102,55 @@ function _render_bench_plot_loaded(xkcd,rows,plot_pdf)
     plot_pdf
 end
 
+function _render_preflight_card_loaded(xkcd,row,plot_pdf)
+    case=row["case"]
+    style=xkcd.theme_xkcd()
+    xkcd.with_theme(style) do
+        figure=xkcd.Figure(size=(840,240),backgroundcolor=:white)
+        axis=xkcd.Axis(figure[1,1],
+            title="Preflight validation — "*row["id"]*" "*row["name"])
+        xkcd.hidedecorations!(axis)
+        xkcd.hidespines!(axis)
+        xkcd.xlims!(axis,0,1)
+        xkcd.ylims!(axis,0,1)
+        details=join((string(key)*"="*string(case[key]) for key in
+            ("dimension","signature","horizon","operation","mode")
+            if haskey(case,key)),"   ")
+        xkcd.text!(axis,0.05,0.72;
+            text="Declared oracle: PASSED",fontsize=25,align=(:left,:center))
+        xkcd.text!(axis,0.05,0.45;
+            text=details,fontsize=18,align=(:left,:center))
+        xkcd.text!(axis,0.05,0.17;
+            text="One representative case. No timing or speed ranking.",
+            fontsize=17,align=(:left,:center))
+        xkcd.save(plot_pdf,figure)
+    end
+    isfile(plot_pdf) && filesize(plot_pdf)>0 || error("preflight card was not rendered")
+    plot_pdf
+end
+
+"""Display oracle coverage beside the method while performance is pending."""
+function _refresh_technique_preflight_article(row,preflight)
+    technique_smoke_evidence(row,preflight)
+    figure_dir=DrWatson.plotsdir("garamonbench","techniques","preflight")
+    paper_dir=DrWatson.papersdir("garamonbench","techniques","preflight")
+    figure=joinpath(figure_dir,"preflight_technique_"*row["id"]*".pdf")
+    mkpath(figure_dir)
+    @eval import CairoMakie
+    cairo=Base.invokelatest(getfield,@__MODULE__,:CairoMakie)
+    previous=Base.invokelatest(cairo.Makie.current_default_theme)
+    @eval import XKCDMakie
+    xkcd=Base.invokelatest(getfield,@__MODULE__,:XKCDMakie)
+    try
+        Base.invokelatest(_render_preflight_card_loaded,xkcd,row,figure)
+    finally
+        Base.invokelatest(cairo.Makie.set_theme!,previous)
+    end
+    source=joinpath(dirname(@__DIR__),"papers",
+        "Garamon_research_article_2026-09-27_en.tex")
+    _compile_bench_article(source,figure_dir,paper_dir)
+end
+
 function _render_bench_plot(rows::AbstractVector,plot_pdf)
     mkpath(dirname(plot_pdf))
     @eval import CairoMakie
@@ -126,7 +175,9 @@ function _compile_bench_article(tex_source,plot_dir,paper_dir;
     isfile(tex_source) || error("Garamon article source is missing")
     mkpath(paper_dir)
     mktempdir() do auxiliary
-        texinputs=join((plot_dir,dirname(tex_source),get(ENV,"TEXINPUTS","")),':')*":"
+        preflight=DrWatson.plotsdir("garamonbench","techniques","preflight")
+        texinputs=join((plot_dir,preflight,dirname(tex_source),
+            get(ENV,"TEXINPUTS","")),':')*":"
         command=`$compiler -pdf -silent -interaction=nonstopmode -halt-on-error -auxdir=$auxiliary -outdir=$paper_dir $tex_source`
         logfile=joinpath(auxiliary,"latexmk.log")
         open(logfile,"w") do io
