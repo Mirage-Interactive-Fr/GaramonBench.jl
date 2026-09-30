@@ -38,7 +38,11 @@ function pc15_generate(case, directory, rng)
     case["dimension"] == 3 && case["scenario"] == "known" &&
         case["strategy"] == "generated" ||
         error("precompilation catalogue smoke contract")
-    environment = lifecycle_environment(joinpath(directory, "catalogue"), true)
+    # Native PerfChecker workers intentionally have a small diagnostic
+    # environment. The target's dependencies belong to the campaign closure.
+    manifest=joinpath(dirname(dirname(pathof(GaramonBench))),"Manifest.toml")
+    environment = lifecycle_environment(joinpath(directory, "catalogue"), true;
+        dependency_manifest=manifest)
     (; environment, expected=pc15_reference())
 end
 

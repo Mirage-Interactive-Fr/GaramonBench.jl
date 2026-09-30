@@ -654,7 +654,11 @@ hierarchy composes them.
 \subsection{JIT generation, precompilation, and restart}
 On-demand code generation may unroll a bounded path set for a
 known support pattern. Generated code size, compilation latency,
-and invalidation are part of its cost. A catalogue for frequently
+and invalidation are part of its cost. The generated arithmetic uses
+typed operand and output buffers; allocation and the runtime output
+size remain outside the emitted path sequence. This keeps the bounded
+kernel inferable without adding a specialization for each output size.
+A catalogue for frequently
 used algebras can shift some compilation before a session, but
 machine architecture, Julia version, metric, scalar type, and
 kernel source must be included in its identity. The code loaded
@@ -663,6 +667,8 @@ method~\cite{juliaprecompile,fftw}. Tests therefore distinguish
 source preprocessing, JIT compilation, catalogue construction,
 reload, and repeated execution. No catalogue is presumed optimal
 for users who cannot predict their future algebra.
+The catalogue build uses the campaign's pinned dependency closure,
+including when the diagnostic worker itself has a smaller environment.
 
 \techniqueplot{14}{Just-in-time product generation}{Generation, compilation, code size, first use, and warm use.}
 \techniqueplot{15}{Precompilation catalogue}{Build, disk size, fresh-process reload, first use, and total episode.}

@@ -10,6 +10,15 @@ include(joinpath(@__DIR__, "..", "adapters", "garamon_precompile_catalogue.jl"))
     @test only(cases)["scenario"] == "known"
     @test only(cases)["strategy"] == "generated"
     mktempdir() do temporary
+        @test_throws ErrorException lifecycle_environment(joinpath(temporary,"incomplete"),true;
+            dependency_manifest=joinpath(@__DIR__,"..","worker","Manifest.toml"))
+        environment=lifecycle_environment(joinpath(temporary,"complete"),true;
+            dependency_manifest=joinpath(@__DIR__,"..","Manifest.toml"))
+        manifest=TOML.parsefile(joinpath(environment.package,"Manifest.toml"))
+        @test length(manifest["deps"]["DelimitedFiles"])==1
+        @test only(manifest["deps"]["Garamon"])["path"]==LIFECYCLE_ROOT
+    end
+    mktempdir() do temporary
         output = joinpath(temporary, "precompile-catalogue")
         @test run_resumable_campaign(config; output) == output
         @test resumable_status(config, output)["status"] == "complete"
