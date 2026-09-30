@@ -505,18 +505,28 @@ preflight_smoke = {dimension = 4, mode = "prepared", density = 0.25, coefficient
 [[technique]]
 id = "40"
 name = "bilinear-kernel-synthesis"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/bilinear.jl"
+test = "test/bilinear.jl"
 campaign = ""
+preflight_test = "test/bilinear_oracle_preflight.jl"
+preflight_config = "config/bilinear_synthesis_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_bilinear.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, support_count = 4, left_pattern = "fixed", preparation = "prebuilt", horizon = 1, cutoff = 1}
 
 [[technique]]
 id = "41"
 name = "verified-superoptimization"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/bilinear.jl"
+test = "test/bilinear.jl"
 campaign = ""
+preflight_test = "test/bilinear_oracle_preflight.jl"
+preflight_config = "config/verified_superopt_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_bilinear.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, support_count = 4, left_pattern = "fixed", preparation = "prebuilt", horizon = 1, mul_weight = 10, add_weight = 1}
 
 [[technique]]
 id = "42"

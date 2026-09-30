@@ -24,7 +24,7 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 XKCDMakie = "ef1f67d4-2c0d-4f2d-9282-34421b12c95e"
 
 [sources]
-Garamon = {rev = "7a016936f06b6c62f6f33a0dcbfc62ac158b3132", url = "https://github.com/Mirage-Interactive-Fr/Garamon.jl.git"}
+Garamon = {rev = "b8de90efeb8ac07aef7c0750dda970f149d06904", url = "https://github.com/Mirage-Interactive-Fr/Garamon.jl.git"}
 PerfChecker = {rev = "release/v1.0.0-rc1", url = "https://github.com/Mirage-Interactive-Fr/PerfChecker.jl.git"}
 XKCDMakie = {rev = "1c80044050aaf6b16ef0f30112bba47f85c97af4", url = "https://github.com/aryavorskiy/XKCDMakie.jl.git"}
 

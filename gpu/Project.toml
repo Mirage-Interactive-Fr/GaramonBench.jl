@@ -11,7 +11,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [sources]
-Garamon = {rev = "7a016936f06b6c62f6f33a0dcbfc62ac158b3132", url = "https://github.com/Mirage-Interactive-Fr/Garamon.jl.git"}
+Garamon = {rev = "b8de90efeb8ac07aef7c0750dda970f149d06904", url = "https://github.com/Mirage-Interactive-Fr/Garamon.jl.git"}
 GaramonBench = {path = ".."}
 PerfChecker = {rev = "release/v1.0.0-rc1", url = "https://github.com/Mirage-Interactive-Fr/PerfChecker.jl.git"}
 

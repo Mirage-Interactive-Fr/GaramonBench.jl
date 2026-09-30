@@ -573,8 +573,40 @@ stable or changing supports, target reachability, plan preparation,
 and episode horizon. Both preparation and execution are recorded;
 the figure remains provisional until isolated measurements qualify.
 
-\techniqueplot{40}{Bilinear kernel synthesis}{Synthesis, code size, compilation, and fixed-kernel execution.}
-\techniqueplot{41}{Verified superoptimization}{Equivalence proof cost and execution of verified fixed-contract kernels.}
+For the exact split Clifford domain described above, the spinor transform
+turns a geometric product into matrix multiplication. A bilinear
+straight-line program can then reduce the number of scalar products.
+We recursively compose Strassen's seven-product $2\times2$ identity
+\cite{strassen1969}, with a configurable classical cutoff. This is a
+specific synthesized kernel family, not a claim of asymptotic benefit
+for the small matrices or sparse operands studied here. The larger
+number of additions, temporary matrices, and conversion cost may
+dominate. We use arbitrary-precision integer coefficients so that
+the bilinear identity and inverse transform remain exact. The domain
+is bounded to interleaved $\mathrm{Cl}(r,r)$ with $1\leq r\leq5$;
+outside that domain the route refuses rather than approximates.
+
+\techniqueplot{40}{Bilinear kernel synthesis}{Seven-product recursion, classical cutoff, transform, inverse transform, preparation, and exact full-output baseline.}
+
+The verified search route compares two candidate families: classical
+matrix multiplication and the recursive seven-product kernel.
+For each base $2\times2$ kernel it evaluates all 16 pairs of elementary
+input matrices. Since every candidate is bilinear, agreement on these
+pairs proves equality on arbitrary matrix inputs; recursive block
+composition carries that certificate to larger sizes. A weighted
+count of scalar products and additions selects a candidate before
+execution. The weights are explicit experimental parameters, not
+learned performance claims. This intentionally bounded search is an
+initial instance of proof-guided superoptimization~\cite{massalin1987};
+it does not search arbitrary instruction sequences. Both routes use
+the same seeded operand episodes and the same ordinary Garamon.jl
+sparse-product baseline, which is measured once per identical scenario.
+The campaigns vary support width, left-operand reuse, preparation,
+episode horizon, cutoff or cost weights. Independent blade-word
+enumeration checks the complete aggregate. Both figures remain
+provisional until isolated measurements qualify.
+
+\techniqueplot{41}{Verified superoptimization}{Tensor verification, weighted candidate search, preparation, full-output execution, and shared baseline.}
 \techniqueplot{42}{Wavefront recursion}{Certified suffix width, frontier memory, preparation, and exact target-coefficient episodes against the standard product chain.}
 
 \section{Reuse, memory, and compilation}
@@ -1038,6 +1070,14 @@ Manipulation in Combinatorial Problems}, DAC (1993).
 \bibitem{rumyantsev2024} G. Rumyantsev,
 \emph{Fast matrix representation for Clifford algebras} (2024).
 \url{https://arxiv.org/abs/2410.06103}.
+\bibitem{strassen1969} V. Strassen,
+\emph{Gaussian elimination is not optimal}, Numerische Mathematik
+13, 354--356 (1969).
+\url{https://doi.org/10.1007/BF02165411}.
+\bibitem{massalin1987} H. Massalin,
+\emph{Superoptimizer: A Look at the Smallest Program}, ASPLOS II
+(1987).
+\url{https://web.stanford.edu/class/cs343/resources/superoptimizer.pdf}.
 \bibitem{art} V. Leis, A. Kemper and T. Neumann,
 \emph{The Adaptive Radix Tree: ARTful Indexing for Main-Memory
 Databases}, ICDE (2013).
