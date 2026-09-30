@@ -14,6 +14,7 @@ include("fermionic_gaussian_oracle_preflight.jl")
 include("precompile_catalogue_oracle_preflight.jl")
 include("adaptive_radix_oracle_preflight.jl")
 include("wavefront_oracle_preflight.jl")
+include("split_matrix_oracle_preflight.jl")
 include("bench_cleanup.jl")
 include("paired_baseline.jl")
 

@@ -281,10 +281,15 @@ preflight_smoke = {dimension = 6, operation = "wedge"}
 [[technique]]
 id = "22"
 name = "clifford-matrix-gfft"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/splitmatrix.jl"
+test = "test/splitmatrix.jl"
 campaign = ""
+preflight_test = "test/split_matrix_oracle_preflight.jl"
+preflight_config = "config/split_matrix_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_split_matrix.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, support_count = 4, left_pattern = "fixed", preparation = "prebuilt", horizon = 1}
 
 [[technique]]
 id = "23"

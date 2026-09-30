@@ -384,15 +384,35 @@ and conversion back to the requested output must be measured.
 \techniqueplot{21}{Materialized trie}{Prefix sharing, build cost, update cost, and repeated lookups.}
 \techniqueplot{43}{Adaptive radix tree}{The same seeded support streams as the trie, including preparation.}
 
-A matrix representation or Clifford transform can recast selected
-products as matrix operations, but its validity depends on metric,
-representation, and coefficient domain. A transform that accelerates
-a dense bulk calculation may require more storage or conversion than
-a sparse targeted query. We therefore treat Clifford-matrix and
-transform routes as separate, contract-specific candidates rather
-than generic replacements.
+A matrix representation can recast selected products as matrix
+operations, but its validity depends on metric, representation, and
+coefficient domain. We implement the recursive right-spinor transform
+of Rumyantsev~\cite{rumyantsev2024} for the interleaved split metric
+$\mathrm{Cl}(r,r)$: a quarter-block butterfly maps $4^r$ blade
+coefficients to a $2^r\times2^r$ matrix, multiplication occurs in
+that matrix algebra, and the inverse butterfly restores every blade
+coefficient. Forward and inverse conversion each require
+$O(r4^r)$ arithmetic operations; matrix multiplication and retained
+storage must be counted separately. The real split signature and
+interleaved basis order are checked before conversion. Tests use
+arbitrary-precision integers to check both the inverse and the
+homomorphism against an independent Clifford-word oracle.
 
-\techniqueplot{22}{Clifford-matrix transform}{Forward conversion, matrix product, inverse conversion, and memory by metric.}
+The measurement campaign uses even ambient dimensions from 2 to 20,
+varying support size, reuse of a left operand, preparation policy,
+and episode horizon. It compares the full accumulated output on the
+same seeded operands with Garamon.jl's ordinary sparse product.
+Fixture coefficients have magnitude at most two and at most 64
+nonzeros per operand. Consequently each transformed entry is bounded
+by 128, each matrix-product entry by $2^{10}128^2=2^{24}$, and the
+128-episode aggregate remains below $2^{53}$; binary64 operations
+therefore represent these integer fixtures exactly. This bounded
+claim does not extend to arbitrary floating inputs or signatures.
+Conversion, matrix multiplication, inverse conversion, retained
+matrix bytes, and the baseline's output conversion are recorded.
+The figure remains provisional until isolated measurements qualify.
+
+\techniqueplot{22}{Clifford-matrix transform}{Split-signature forward transform, matrix product, inverse transform, retained bytes, and full-output baseline.}
 
 \subsection{Binary rank and invariant sectors}
 Let \(S\) be the union of masks relevant to a diagonal-metric
@@ -997,6 +1017,9 @@ Decomposition}, SIAM Journal on Scientific Computing 33,
 \bibitem{minato} S. Minato, \emph{Zero-Suppressed BDDs for Set
 Manipulation in Combinatorial Problems}, DAC (1993).
 \url{https://doi.org/10.1145/157485.164890}.
+\bibitem{rumyantsev2024} G. Rumyantsev,
+\emph{Fast matrix representation for Clifford algebras} (2024).
+\url{https://arxiv.org/abs/2410.06103}.
 \bibitem{art} V. Leis, A. Kemper and T. Neumann,
 \emph{The Adaptive Radix Tree: ARTful Indexing for Main-Memory
 Databases}, ICDE (2013).
