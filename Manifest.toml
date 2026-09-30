@@ -644,8 +644,8 @@ version = "1.2.0"
 
 [[deps.Garamon]]
 deps = ["DelimitedFiles", "Dictionaries", "LinearAlgebra", "PrettyTables", "Random", "SparseArrays", "StaticArrays"]
-git-tree-sha1 = "cc991a5dfdfa9c2ed63c9515c702177245f3ae8f"
-repo-rev = "499aa89"
+git-tree-sha1 = "b2aabce51d2f335e0436df3e13657a180d88043e"
+repo-rev = "c98a70a"
 repo-url = "https://github.com/Mirage-Interactive-Fr/Garamon.jl.git"
 uuid = "dbf15181-0796-4f0c-80cc-db9023881340"
 version = "0.0.1"

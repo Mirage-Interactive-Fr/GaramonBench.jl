@@ -471,10 +471,14 @@ preflight_smoke = {dimension = 4, mode = "factored", rotation_count = 2, support
 [[technique]]
 id = "39"
 name = "signed-disjoint-convolution"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/disjoint.jl"
+test = "test/disjoint.jl"
 campaign = ""
+preflight_config = "config/signed_disjoint_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_signed_disjoint.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, mode = "prepared", density = 0.25, coefficient_bits = 8, horizon = 1}
 
 [[technique]]
 id = "40"

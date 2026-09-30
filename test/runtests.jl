@@ -5,6 +5,7 @@ include("bounds_b1.jl")
 include("resume.jl")
 include("techniques.jl")
 include("givens_basis_change_oracle_preflight.jl")
+include("signed_disjoint_oracle_preflight.jl")
 
 @testset "article has empty result slots until a qualified run" begin
     source=joinpath(pkgdir(GaramonBench),"papers",

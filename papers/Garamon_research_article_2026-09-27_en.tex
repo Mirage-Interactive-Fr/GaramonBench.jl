@@ -417,16 +417,34 @@ extracting a plan belongs to preparation.
 \techniqueplot{16}{Expression DAG}{Shared subexpressions, invalidations, and total episode cost.}
 \techniqueplot{23}{E-graph rewriting}{Verified rewrite search, extraction, compilation, and execution.}
 
-Signed disjoint convolution is a potential route for exterior
-products because overlapping masks vanish; it is not, by that fact,
-a complete geometric-product algorithm. Bilinear kernel synthesis
+The exterior product can be written as a signed disjoint convolution:
+for each output mask $S$, sum $\epsilon(A,S\setminus A)x_Ay_{S\setminus A}$
+over $A\subseteq S$, where $\epsilon$ is the parity of the shuffle
+that orders the concatenated basis vectors. The target-ordered scan
+visits $3^n$ subset--target incidences at dimension $n$; a prepared
+version stores only incidences present in both input supports and
+reuses them for changing coefficients. A path budget and a dimension
+cap make refusal explicit. All coefficients accumulate in arbitrary
+precision integers, so cancellations never justify dropping an
+unvisited contribution. The pairwise sparse wedge kernel is the
+same-contract baseline. The campaign varies ten dimensions, support
+density, coefficient size, and episode length under shared seeds,
+measuring both plan preparation and execution. Fast subset convolution
+over an ordinary commutative sum--product ring can achieve
+$O(n^2 2^n)$~\cite{bjorklund2007}; its transform does not immediately
+preserve the anticommutative shuffle sign. The present exact scan
+therefore makes no claim to that bound, nor to a geometric-product
+algorithm. Its figure remains provisional until an isolated run.
+
+\techniqueplot{39}{Signed disjoint convolution}{Exact exterior-product cost and transform preparation by support density.}
+
+Bilinear kernel synthesis
 and verified superoptimization target small fixed kernels. Their
 algebraic equivalence and machine-level behavior must be proved
 before timings are compared. A wavefront traversal may batch
 independent recursion nodes and improve scheduling, provided
 frontier storage, fragmentation, and fallback depth remain bounded.
 
-\techniqueplot{39}{Signed disjoint convolution}{Exact exterior-product cost and transform preparation by support density.}
 \techniqueplot{40}{Bilinear kernel synthesis}{Synthesis, code size, compilation, and fixed-kernel execution.}
 \techniqueplot{41}{Verified superoptimization}{Equivalence proof cost and execution of verified fixed-contract kernels.}
 \techniqueplot{42}{Wavefront recursion}{Frontier width, queue memory, and exact episode versus depth-first traversal.}
@@ -761,6 +779,10 @@ hyperparameters.
 Rotations Transforming a General Matrix to Triangular Form},
 Journal of the Society for Industrial and Applied Mathematics,
 6(1), 26--50, 1958. DOI: 10.1137/0106004.
+\bibitem{bjorklund2007} A. Bj\"orklund, T. Husfeldt, P. Kaski and
+M. Koivisto, \emph{Fourier Meets M\"obius: Fast Subset Convolution},
+STOC, 67--74 (2007).
+\url{https://www.cs.helsinki.fi/u/mkhkoivi/publications/stoc-2007.pdf}.
 \bibitem{breuils2019} S. Breuils, V. Nozick and L. Fuchs,
 \emph{Garamon: A Geometric Algebra Library Generator},
 Advances in Applied Clifford Algebras 29, 69 (2019).
