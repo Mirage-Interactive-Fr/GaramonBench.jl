@@ -513,13 +513,31 @@ algorithm. Its figure remains provisional until an isolated run.
 Bilinear kernel synthesis
 and verified superoptimization target small fixed kernels. Their
 algebraic equivalence and machine-level behavior must be proved
-before timings are compared. A wavefront traversal may batch
-independent recursion nodes and improve scheduling, provided
-frontier storage, fragmentation, and fallback depth remain bounded.
+before timings are compared. Wavefront traversal instead changes
+the scheduling of an exact sparse product-chain recurrence. For a
+requested output mask $t$ and factor supports $S_1,\ldots,S_k$, set
+$R_{k+1}=\{0\}$ and
+$R_i=\{s\mathbin{\mathrm{xor}}r:s\in S_i,\ r\in R_{i+1}\}$.
+After factor $i$, a forward frontier mask $m$ is retained exactly
+when $m\mathbin{\mathrm{xor}}t\in R_{i+1}$. Any path to $t$ must
+satisfy this condition; the suffix sets may retain extra paths but
+cannot discard a contribution. Coefficients on the retained frontier
+are accumulated with the exact blade shuffle sign and diagonal metric
+factors. The prepared certificate is reused only while supports and
+metric remain unchanged; coefficient updates are allowed. Suffix,
+frontier, and visited-pair limits cause an explicit refusal rather
+than approximate pruning.
+
+The wavefront campaign compares the same seeded three- or four-factor
+episodes with the standard Garamon.jl product-chain coefficient. It
+varies dimension, signature, active-support width and placement,
+stable or changing supports, target reachability, plan preparation,
+and episode horizon. Both preparation and execution are recorded;
+the figure remains provisional until isolated measurements qualify.
 
 \techniqueplot{40}{Bilinear kernel synthesis}{Synthesis, code size, compilation, and fixed-kernel execution.}
 \techniqueplot{41}{Verified superoptimization}{Equivalence proof cost and execution of verified fixed-contract kernels.}
-\techniqueplot{42}{Wavefront recursion}{Frontier width, queue memory, and exact episode versus depth-first traversal.}
+\techniqueplot{42}{Wavefront recursion}{Certified suffix width, frontier memory, preparation, and exact target-coefficient episodes against the standard product chain.}
 
 \section{Reuse, memory, and compilation}
 \subsection{Workspaces and a RAM-bounded route}

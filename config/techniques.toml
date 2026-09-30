@@ -511,10 +511,15 @@ campaign = ""
 [[technique]]
 id = "42"
 name = "wavefront-recursion"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/wavefront.jl"
+test = "test/wavefront.jl"
 campaign = ""
+preflight_test = "test/wavefront_oracle_preflight.jl"
+preflight_config = "config/wavefront_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_wavefront.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 6, signature = "mixed", support_shape = "clustered", active_directions = "narrow", mutation = "stable", preparation = "prebuilt", chain_length = 3, horizon = 1, target_kind = "reachable"}
 
 [[technique]]
 id = "43"
