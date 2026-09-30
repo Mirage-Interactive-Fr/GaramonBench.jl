@@ -3,6 +3,18 @@ const SOURCE_EXTENSIONS=Set([".jl",".toml",".cpp",".cc",".c",".hpp",".h",
 const EXCLUDED_COMPONENTS=Set([".git","build","results","outputs",
     "generated","generated_costs","long_horizon_results"])
 
+"""The Garamon dependency actually resolved by Pkg, unless explicitly overridden."""
+function garamon_source_root()
+    if haskey(ENV,"GARAMON_JULIA_ROOT")
+        root=abspath(expanduser(ENV["GARAMON_JULIA_ROOT"]))
+        isfile(joinpath(root,"Project.toml")) || error("GARAMON_JULIA_ROOT is not a package root")
+        return root
+    end
+    package_file=Base.find_package("Garamon")
+    isnothing(package_file) && error("Garamon dependency is not installed")
+    dirname(dirname(package_file))
+end
+
 function probe(command::Cmd; limit=20_000)
     try
         executable=Sys.which("timeout")
@@ -17,7 +29,13 @@ end
 function repository_files(root)
     files=String[]
     for (directory,subdirs,names) in walkdir(root)
-        filter!(name->!(name in EXCLUDED_COMPONENTS),subdirs)
+        filter!(subdirs) do name
+            name in EXCLUDED_COMPONENTS && return false
+            # DoctorWatson stores campaign archives under data/garamonbench.
+            # Those archives can contain TOML and source snapshots, but are
+            # measurements, not inputs to the repository fingerprint.
+            relpath(joinpath(directory,name),root)!=joinpath("data","garamonbench")
+        end
         for name in names
             path=joinpath(directory,name)
             islink(path) && continue

@@ -18,15 +18,16 @@ output_contract = "owned_all_structural_coefficients_per_step"
 [grid]
 dimension = [2, 3, 4, 5, 6, 7, 8, 16, 32, 64, 65, 96, 128, 129]
 signature = ["positive", "mixed", "degenerate"]
-strategy = ["lru", "roulette"]
+strategy = ["lru", "roulette", "tinylfu", "sieve"]
 trace = ["scan", "phase", "shift"]
 horizon = [32, 1024]
-capacity_plans = [2]
+capacity_plans = [1, 2]
 eviction_exponent = [0.0, 0.5, 1.0, 2.0, 4.0]
+frequency_slots = [16, 256, 4096]
 draw_seed = [20260928, 20260929, 20260930, 20261001, 20261002]
 
 [limits]
-max_cases = 12600
+max_cases = 151200
 case_seconds = 120
 controller_rss_bytes = 4294967296
 build_disk_bytes = 268435456

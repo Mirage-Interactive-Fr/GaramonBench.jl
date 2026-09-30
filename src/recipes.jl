@@ -299,7 +299,7 @@ end
 function run_recipe(config;output_root)
     plan=recipe_plan(config); recipe=plan["recipe"]; id=recipe["id"]; limits=plan["limits"]
     Sys.islinux() || error("run-recipe currently requires Linux /proc")
-    bench=dirname(@__DIR__); root=abspath(expanduser(get(ENV,"GARAMON_JULIA_ROOT","~/.julia/dev/Garamon")))
+    bench=dirname(@__DIR__); root=garamon_source_root()
     isdir(root) || error("exact target Julia source is required")
     # Reject output inside a fingerprinted source tree, which would invalidate itself.
     output_root=abspath(output_root)

@@ -173,10 +173,8 @@ function configured_repositories(config)
         if value=="artifact:garamon_cpp"
             roots[label]=ensure_cpp_source()
         elseif label=="julia" && spec isa AbstractDict &&
-                !haskey(ENV,spec["env"]) && !isdir(expanduser(value))
-            package_file=Base.find_package("Garamon")
-            isnothing(package_file) && error("Garamon dependency is not installed")
-            roots[label]=dirname(dirname(package_file))
+                !haskey(ENV,spec["env"])
+            roots[label]=garamon_source_root()
         else
             roots[label]=expanduser(value)
         end

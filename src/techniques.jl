@@ -4,7 +4,7 @@ const COMPATIBILITY_CODES=Set(["O","?","X1","—"])
 
 """Read and check all 46 declared techniques without claiming runtime readiness."""
 function technique_inventory(;benchmark_root=dirname(@__DIR__),
-    julia_root=get(ENV,"GARAMON_JULIA_ROOT",joinpath(homedir(),".julia","dev","Garamon")))
+    julia_root=garamon_source_root())
     file=joinpath(benchmark_root,"config","techniques.toml")
     registry=TOML.parsefile(file)
     registry["schema_version"]==1 || error("technique registry schema")

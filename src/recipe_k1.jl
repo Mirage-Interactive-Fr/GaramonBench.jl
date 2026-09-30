@@ -103,7 +103,7 @@ Uses the target's frozen-contract native auditor and records its source hash.
 Archive paths may come from multiple recipe runs with the same native manifest
 fingerprint and condition. This is coverage verification, not timing comparison.
 """
-function audit_k1(manifest,output,archives;root=abspath(expanduser(get(ENV,"GARAMON_JULIA_ROOT","~/.julia/dev/Garamon"))))
+function audit_k1(manifest,output,archives;root=garamon_source_root())
     isempty(archives) && error("supply at least one K1 dimension archive")
     ispath(output) && error("use a fresh coverage output path")
     source=joinpath(root,"perf","binary_rank_compact_audit.jl")

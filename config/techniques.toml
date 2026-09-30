@@ -159,18 +159,26 @@ preflight_smoke = {dimension = 4, signature = "mixed", strategy = "roulette", tr
 [[technique]]
 id = "12"
 name = "tinylfu-plan-admission"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/cache.jl"
+test = "test/products.jl"
 campaign = ""
+preflight_config = "config/plan_cache_tuning_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_plan_cache.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "tinylfu", trace = "scan", horizon = 32, capacity_plans = 2, eviction_exponent = 1.0, draw_seed = 20260928}
 
 [[technique]]
 id = "13"
 name = "sieve-plan-eviction"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/cache.jl"
+test = "test/products.jl"
 campaign = ""
+preflight_config = "config/plan_cache_tuning_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_plan_cache.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, signature = "mixed", strategy = "sieve", trace = "scan", horizon = 32, capacity_plans = 2, eviction_exponent = 1.0, draw_seed = 20260928}
 
 [[technique]]
 id = "14"

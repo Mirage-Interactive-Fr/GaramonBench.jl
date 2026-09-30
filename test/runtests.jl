@@ -13,6 +13,16 @@ include("techniques.jl")
     @test occursin("qualified_ega3_vector_libraries.pdf",content)
     @test !occursin("\\addplot",content)
     @test !occursin("exploratory_",content)
+    registry=TOML.parsefile(joinpath(pkgdir(GaramonBench),"config","techniques.toml"))
+    expected=Set(vcat(getindex.(registry["technique"],"id"),
+        getindex.(registry["combination"],"id")))
+    figure_ids=[match.captures[1] for match in
+        eachmatch(r"\\techniqueplot\{([^}]+)\}",content)]
+    @test length(figure_ids)==48
+    @test length(unique(figure_ids))==48
+    @test Set(figure_ids)==expected
+    @test occursin("\\begin{figure}[H]",content)
+    @test !occursin("\\section{Result slots reserved",content)
     mktempdir() do directory
         figure=joinpath(directory,"ega3_vector_libraries.pdf")
         qualified=joinpath(directory,"qualified_ega3_vector_libraries.pdf")
@@ -66,6 +76,18 @@ end
     @test case_id(changed)!=case_id(cases[1])
 end
 
+@testset "Pkg-resolved Garamon source" begin
+    withenv("GARAMON_JULIA_ROOT"=>nothing) do
+        package_file=Base.find_package("Garamon")
+        @test !isnothing(package_file)
+        root=dirname(dirname(package_file))
+        @test GaramonBench.garamon_source_root()==root
+        config=load_config(joinpath(@__DIR__,"..","config",
+            "plan_cache_tuning_oracle_preflight.toml"))
+        @test GaramonBench.configured_repositories(config)["julia"]==root
+    end
+end
+
 @testset "external evidence validation (synthetic fixture)" begin
     mktempdir() do directory
         cases=GaramonBench.cpp_expected_cases(true)
@@ -100,6 +122,9 @@ end
         mkdir(joinpath(root,"data")); write(joinpath(root,"data","Template.hpp"),"int f();\n")
         third=repository_identity(root)
         @test second["sha256"]!=third["sha256"]
+        mkpath(joinpath(root,"data","garamonbench","preflight"))
+        write(joinpath(root,"data","garamonbench","preflight","progress.toml"),"status = \"running\"\n")
+        @test third["sha256"]==repository_identity(root)["sha256"]
         write(joinpath(root,"discard.so"),UInt8[0,1,2])
         @test third["sha256"]==repository_identity(root)["sha256"]
         @test_throws ErrorException archive_file!(joinpath(root,"discard.so"),joinpath(root,"copy.so"))

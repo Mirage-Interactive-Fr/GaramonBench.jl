@@ -148,7 +148,12 @@ end
 function _profile_preflight_loaded(input;output)
     plan=profile_plan(input);output=abspath(output)
     ispath(output) && error("fresh profiling output required")
-    any(root->output==root || startswith(output,root*"/"),(dirname(@__DIR__),plan["julia_root"])) && error("profiling outputs must be outside source repositories")
+    benchroot=dirname(@__DIR__)
+    inside(path,root)=path==root || startswith(path,root*"/")
+    archived_data=joinpath(benchroot,"data","garamonbench")
+    (inside(output,plan["julia_root"]) ||
+        (inside(output,benchroot) && !inside(output,archived_data))) &&
+        error("profiling outputs must be outside source repositories or in DoctorWatson data/garamonbench")
     mkpath(output);write_toml(joinpath(output,"profile-plan.toml"),plan)
     roots=Dict("benchmark"=>dirname(@__DIR__),"julia"=>plan["julia_root"])
     identities=Dict(k=>repository_identity(v;snapshot=joinpath(output,"sources",k),max_bytes=plan["limits"]["source_bytes"]) for (k,v) in roots)

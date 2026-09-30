@@ -72,7 +72,7 @@ end
 function run_b1(input;output)
     VERSION.major==1 && VERSION.minor==13 || error("B1 controller requires Julia 1.13")
     plan=b1_plan(input);output=abspath(output);ispath(output) && error("use a fresh B1 output directory")
-    root=abspath(expanduser(get(ENV,"GARAMON_JULIA_ROOT","~/.julia/dev/Garamon")));bench=dirname(@__DIR__)
+    root=garamon_source_root();bench=dirname(@__DIR__)
     any(p->output==p || startswith(output,p*"/"),(root,bench)) && error("place B1 output outside source trees")
     isfile(joinpath(root,"perf","bounds_b1.jl")) || error("target B1 prototype is required")
     mkpath(output);limits=plan["limits"]

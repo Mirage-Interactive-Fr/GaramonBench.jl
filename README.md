@@ -98,6 +98,31 @@ mathematical composition matrix is in config/compatibility_matrix.csv;
 its conditions are in the same TOML registry. Neither file asserts a
 performance ranking.
 
+The registered technique workflow uses the same DrWatson archive structure.
+Choose a campaign name once and reuse it when resuming:
+
+~~~julia
+using GaramonBench, DrWatson
+root = DrWatson.datadir("garamonbench", "techniques-dedicated-001")
+preflight = joinpath(root, "preflight")
+run_technique_smoke(preflight)
+run_technique_profiles(preflight, joinpath(root, "profiles"))
+run_technique_bench(preflight, joinpath(root, "benchmark"))
+~~~
+
+The smoke run checks one oracle case per registered route. Profiling captures
+bounded PerfChecker diagnostics on that case. The benchmark runs the full
+parameter grid only after a matching smoke archive exists. Each route has its
+own resumable directory; completed cases are verified and skipped when the
+benchmark call is repeated. An incomplete PerfChecker capture requires a new
+profile output directory. Use `ids=["12", "13"]` on any of these functions to
+select routes. Registry entries still marked `research` are reported as such
+and are not measured. Run CPU routes from the package environment with their
+registered thread count; GPU routes require the package's `gpu/` environment.
+Inspect `technique_bench_plan()` for route case counts before starting a large
+campaign. The article currently has 48 figure slots, one per registry entry;
+only qualified completed data from the dedicated machine may replace them.
+
 The configurations under config/ and adapters under adapters/ define
 oracle preflights, CPU and GPU routes, matched C++/Julia kernels, cache
 policies, sparse and dense storage, targeted outputs, workspaces, and

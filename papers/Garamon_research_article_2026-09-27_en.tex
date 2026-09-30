@@ -7,6 +7,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs,longtable,tabularx,array}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{microtype}
 \usepackage[margin=23mm]{geometry}
 \usepackage[colorlinks=true,urlcolor=blue,linkcolor=blue,citecolor=blue]{hyperref}
@@ -16,15 +17,17 @@
 \newcommand{\supp}{\operatorname{supp}}
 \newcommand{\code}[1]{\texttt{#1}}
 \newcommand{\pendingfigure}[4]{%
-\begin{figure}[tbp]
+\begin{figure}[H]
 \centering
 \IfFileExists{#1}{\includegraphics[width=.88\linewidth]{#1}}{%
-\fbox{\parbox[c][38mm][c]{.84\linewidth}{\centering
+\fbox{\parbox[c][18mm][c]{.84\linewidth}{\centering
 \textbf{Awaiting dedicated benchmark data}\\[2mm]
 \small #2}}}
 \caption{#3}
 \label{#4}
 \end{figure}}
+\newcommand{\techniqueplot}[3]{%
+\pendingfigure{plot_technique_#1.pdf}{#2}{#3}{fig:technique-#1}}
 \title{Toward Workload-Aware Geometric Algebra in Garamon.jl:\\
 Algorithms, Exactness Contracts, and a Reproducible Benchmark Protocol}
 \author{}
@@ -184,6 +187,16 @@ relative execution speed.}
 \label{tab:design}
 \end{table}
 
+\pendingfigure{plot_cpp_julia_matched.pdf}
+{Matched C++ and Julia routes.}
+{The matched campaign will separate preparation, compilation, and
+equivalent execution contracts.}{fig:matched}
+
+\pendingfigure{qualified_ega3_vector_libraries.pdf}
+{EGA3 vector products across GA libraries.}
+{The dedicated \code{bench()} campaign will compare identical seeded
+requests in Garamon.jl, GAL, and Versor.}{fig:external-ga}
+
 \section{Workloads that must not be conflated}
 A measurement is meaningful only after the task and ownership of its
 result are fixed. The following scenarios deliberately exercise
@@ -269,6 +282,10 @@ the output. Work on sparse tensor workspaces and compiler-generated
 sparse iteration motivates this representation-aware comparison
 without supplying a geometric-algebra speed ranking~\cite{taco,sparseworkspace,finch}.
 
+\techniqueplot{01}{Dense multivectors}{Complete-product time, allocation, and peak memory by dimension and occupancy.}
+\techniqueplot{02}{Sparse supports}{The same seeded products in sparse storage, including lookup and conversion costs.}
+\techniqueplot{03}{Grade blocks}{Input grade pair, occupancy, operation, block preparation, and owned output.}
+
 Masks may fit a fixed machine integer, a wider fixed integer, or
 arbitrary precision storage. The mathematical blade is unchanged,
 but bit operations, hashing, and combinatorial rank calculations
@@ -277,6 +294,8 @@ representation boundaries and compare identical supports; changing
 the corpus at a boundary would confound the effect of the mask type.
 A combinatorial rank is useful for a fixed grade only if the
 indexing table or arithmetic saves more than it costs.
+
+\techniqueplot{30}{Blade-mask indexing}{Construction and lookup across machine-word and wider-mask boundaries.}
 
 \subsection{Factorization, active subspaces, and compact diagrams}
 A decomposable blade and a product of versors can remain factorized
@@ -287,6 +306,9 @@ subspace, the calculation can be performed with fewer active
 directions and mapped back. A general linear subspace needs a valid
 change of basis and must account for its conditioning and support
 expansion.
+
+\techniqueplot{17}{Factored blades and versors}{Factor count, expansion, and complete transformation episodes.}
+\techniqueplot{18}{Active coordinate subspace}{Ambient versus active dimension, certification, embedding, and fallback.}
 
 Tensor trains represent coefficient tensors with cores; they are
 exact only while the retained ranks and coefficients reproduce the
@@ -299,6 +321,11 @@ prefix sharing~\cite{art}. These structures are candidates when a
 long workload reuses topology. Their setup, updates, node count,
 and conversion back to the requested output must be measured.
 
+\techniqueplot{19}{Exact tensor train}{Certified rank, contraction, reconstruction, and peak memory.}
+\techniqueplot{20}{Weighted zero-suppressed diagram}{Build time, shared nodes, exact product, and output expansion.}
+\techniqueplot{21}{Materialized trie}{Prefix sharing, build cost, update cost, and repeated lookups.}
+\techniqueplot{43}{Adaptive radix tree}{The same seeded support streams as the trie, including preparation.}
+
 A matrix representation or Clifford transform can recast selected
 products as matrix operations, but its validity depends on metric,
 representation, and coefficient domain. A transform that accelerates
@@ -306,6 +333,8 @@ a dense bulk calculation may require more storage or conversion than
 a sparse targeted query. We therefore treat Clifford-matrix and
 transform routes as separate, contract-specific candidates rather
 than generic replacements.
+
+\techniqueplot{22}{Clifford-matrix transform}{Forward conversion, matrix product, inverse conversion, and memory by metric.}
 
 \subsection{Binary rank and invariant sectors}
 Let \(S\) be the union of masks relevant to a diagonal-metric
@@ -325,6 +354,10 @@ small would discard contributions to a general exact product. Both
 binary-rank and sector routes therefore need construction
 certificates and a fallback on invalidation.
 
+\techniqueplot{31}{Binary support rank}{Ambient dimension, compressed rank, cocycle preparation, and complete episode.}
+\techniqueplot{32}{Invariant sectors}{Certificate, sector products, recomposition, and exact fallback.}
+\techniqueplot{K1}{Compact rank and workspace combination}{Four exact routes compared across dimension shards and reuse horizons.}
+
 \section{Exact product paths and preparation}
 \subsection{Traversal, grade filtering, and joins}
 Direct sparse multiplication enumerates active operand pairs and
@@ -337,6 +370,9 @@ of grades; it must use the ambient grading and the correct operation
 may remove a branch because a heuristic predicts it is unimportant
 in an exact request.
 
+\techniqueplot{04}{Targeted recursion}{Visited branches and exact requested-output time across support patterns.}
+\techniqueplot{05}{Exact grade filter}{Reachable grades, pruned branches, and total cost by operation.}
+
 For a selected output mask \(K\), an XOR join probes only compatible
 operand masks. For a selected coefficient of \((ab)c\), a three-way
 join uses \(C=A\triangle B\triangle K\), then evaluates the same
@@ -346,6 +382,9 @@ their database complexity theorems do not automatically transfer to
 Clifford signs, metrics, or a different requested output. The
 comparison must count support indexing and accumulation, and must
 state whether one or many outputs are requested.
+
+\techniqueplot{06}{XOR join}{Index construction, probes, and total cost by requested coefficient count.}
+\techniqueplot{07}{Join-three}{Direct ternary join versus ordered nested products for the same output.}
 
 A \code{ProductPlan} or ternary plan stores paths that can be reused
 when topology is stable. It must reread coefficients and revalidate
@@ -363,6 +402,8 @@ For horizon \(H\), a simple accounting identity is
 This equation defines measured components; it predicts no crossover
 without data.
 
+\techniqueplot{08}{Prepared plans}{Construction, first use, warm use, and complete episode by horizon.}
+
 \subsection{Expression sharing and algebraic rewriting}
 An expression DAG can share a subexpression within one evaluation
 when purity and dependencies are known. Memoizing its numeric value
@@ -373,6 +414,9 @@ to preserve the metric-specific algebraic identity, output request,
 and declared floating-point semantics. The cost of searching and
 extracting a plan belongs to preparation.
 
+\techniqueplot{16}{Expression DAG}{Shared subexpressions, invalidations, and total episode cost.}
+\techniqueplot{23}{E-graph rewriting}{Verified rewrite search, extraction, compilation, and execution.}
+
 Signed disjoint convolution is a potential route for exterior
 products because overlapping masks vanish; it is not, by that fact,
 a complete geometric-product algorithm. Bilinear kernel synthesis
@@ -381,6 +425,11 @@ algebraic equivalence and machine-level behavior must be proved
 before timings are compared. A wavefront traversal may batch
 independent recursion nodes and improve scheduling, provided
 frontier storage, fragmentation, and fallback depth remain bounded.
+
+\techniqueplot{39}{Signed disjoint convolution}{Exact exterior-product cost and transform preparation by support density.}
+\techniqueplot{40}{Bilinear kernel synthesis}{Synthesis, code size, compilation, and fixed-kernel execution.}
+\techniqueplot{41}{Verified superoptimization}{Equivalence proof cost and execution of verified fixed-contract kernels.}
+\techniqueplot{42}{Wavefront recursion}{Frontier width, queue memory, and exact episode versus depth-first traversal.}
 
 \section{Reuse, memory, and compilation}
 \subsection{Workspaces and a RAM-bounded route}
@@ -392,6 +441,8 @@ subsequent result; concurrent calls need separate or synchronized
 workspaces. Preparation, peak resident memory, garbage collection,
 and owned-output copying remain observable even if an inner kernel
 allocates nothing.
+
+\techniqueplot{09}{Reusable workspace}{Preparation, allocations, retained bytes, and owned-output cost from small dimensions upward.}
 
 The proposed RAM-bounded route asks whether an exact output can be
 streamed in blocks or recomputed from checkpoints when a full
@@ -417,6 +468,11 @@ changing algebra. Two replacement policies for the same cache slot
 are alternatives unless a new, explicitly specified cache
 hierarchy composes them.
 
+\techniqueplot{10}{LRU plan cache}{Trace, capacity, hit rate, rebuild time, and complete episode.}
+\techniqueplot{11}{Roulette eviction}{The same traces with varied selection exponent and seed.}
+\techniqueplot{12}{TinyLFU admission}{Frequency-estimation cost, admission decisions, hit rate, and episode.}
+\techniqueplot{13}{SIEVE eviction}{Second-chance scans, eviction cost, hit rate, and episode.}
+
 \subsection{JIT generation, precompilation, and restart}
 On-demand code generation may unroll a bounded path set for a
 known support pattern. Generated code size, compilation latency,
@@ -430,6 +486,9 @@ source preprocessing, JIT compilation, catalogue construction,
 reload, and repeated execution. No catalogue is presumed optimal
 for users who cannot predict their future algebra.
 
+\techniqueplot{14}{Just-in-time product generation}{Generation, compilation, code size, first use, and warm use.}
+\techniqueplot{15}{Precompilation catalogue}{Build, disk size, fresh-process reload, first use, and total episode.}
+
 \section{Specialized algebraic structure}
 \subsection{Degeneracy and short identities}
 For a degenerate metric, the radical is the kernel of its bilinear
@@ -440,12 +499,16 @@ membership in the radical. The calculation must preserve
 multiplication order and the inverse's domain; failed
 certification triggers a general route or an explicit rejection.
 
+\techniqueplot{33}{Radical nilpotence}{Certificate, finite-series preparation, inverse, and fallback by radical size.}
+
 If an element satisfies a certified short polynomial identity,
 such as \(A^2=\lambda 1\), powers and recurrences can be evaluated
 through that identity while the same element and metric remain in
 force. Testing the identity on a few sample coefficients is not a
 certificate. The time to construct and revalidate it must be
 amortized across the declared reuse horizon.
+
+\techniqueplot{34}{Short polynomial identity}{Certification and exact powers or recurrences across exponents and horizons.}
 
 \subsection{Scalar chains, Gram structure, and Gaussian classes}
 The scalar part of an even ordered product of vectors can be
@@ -456,6 +519,9 @@ floating-point cancellation need independent examination. Shared
 contractions across related chains might repay a workspace or
 cache; changing vectors invalidate numeric contractions.
 
+\techniqueplot{35}{Pfaffian scalar chain}{Chain length, construction, contractions, reuse, and oracle-checked output.}
+\techniqueplot{K3}{Shared Pfaffian workspace}{Shared preparation versus separate exact scalar-chain calculations.}
+
 A cross-Gram matrix can certify or simplify certain blade scalar
 pairings. Its rank does not, by itself, identify every coefficient
 of a general geometric product. Fermionic Gaussian
@@ -464,12 +530,17 @@ operations preserve the Gaussian class. Both ideas are valuable
 because they change the representation of a certified special
 problem, and both require an exact fallback outside that class.
 
+\techniqueplot{36}{Cross-Gram rank}{Certified rank, pairing construction, selected scalar cost, and fallback.}
+\techniqueplot{37}{Fermionic Gaussian operators}{Class certification, closed operations, conversion, and fallback.}
+
 A factored change of basis, for example by a sequence of small
 plane transformations, could avoid storing a large grade-wise
 matrix. The induced action on blades, support expansion, and
 rounding must be included. It competes with direct general-metric
 multiplication and with a materialized transform only for the same
 basis and output contract.
+
+\techniqueplot{38}{Factored Givens basis change}{Transformation count, support expansion, conditioning, and total episode.}
 
 \subsection{Exact modular and filtered decisions}
 Multimodular computation can reconstruct coefficients over a
@@ -483,6 +554,10 @@ contract: it must not silently replace a request for a full
 multivector. Certificates need to propagate through representation
 changes, plan reuse, and recurrence steps; a lost precondition
 causes revalidation or fallback.
+
+\techniqueplot{44}{Multimodular reconstruction}{Prime count, modular products, CRT bounds, and exact reconstruction.}
+\techniqueplot{45}{Filtered adaptive precision}{Certified fast decisions, near-zero fallbacks, and total decision time.}
+\techniqueplot{46}{Propagated certificates}{Validation, invalidation, fallback, and chained-operation cost.}
 
 \section{Approximation is a separate contract}
 Contribution thresholds, stochastic contribution roulette, and
@@ -498,6 +573,9 @@ random seeds, and the cost of any residual or replay. The
 approximate API and its figures remain separate from the exact
 comparisons.
 
+\techniqueplot{24}{Deferred exact replay}{Provenance size, deferred work, replay cost, and final exactness across recurrences.}
+\techniqueplot{25}{Approximate pruning and roulette}{Survival chance, time, trajectory error, bias, and rare events.}
+
 \section{Parallel execution and selection}
 Threads can partition independent products or output regions, but
 must avoid races and declare the order of reduction. Processes can
@@ -511,6 +589,10 @@ Kernel fusion and captured graphs are separate candidates for
 repeated resident work; their preparation and output semantics
 must match the CPU episode being compared.
 
+\techniqueplot{27}{CPU threads and SIMD batches}{Batch size, lane count, packing, reductions, and complete episode.}
+\techniqueplot{28}{CPU processes}{Worker count, serialization, duplicated plans, and throughput.}
+\techniqueplot{29}{GPU kernels and transfers}{Host-owned versus resident requests, launches, transfers, and device memory.}
+
 A portfolio selector can route a certified workload to an
 admissible algorithm using features such as dimension, support
 size, grade, metric structure, requested output, reuse horizon,
@@ -522,6 +604,8 @@ combinations only after qualified measurements exist. SHAP-style
 attribution may help explain a trained selector~\cite{shap};
 it is not evidence that an algorithm is intrinsically faster.
 Until then, no learned routing threshold is claimed.
+
+\techniqueplot{26}{Analytic route selector}{Feature and dispatch overhead and regret against admissible exact routes.}
 
 \section{Combining strategies}
 Several techniques act at different stages: a certified active
@@ -604,62 +688,8 @@ rerunning validated cases. Raw samples and qualification reports
 remain distinct from derived CSV summaries and article plots.
 The benchmark machine receives the package and starts a fresh
 archive. If a figure is absent, the manuscript shows the
-explicit empty slot below. It never inserts local screening
+explicit empty slot beside the corresponding method. It never inserts local screening
 numbers as a substitute for the dedicated run.
-
-\section{Result slots reserved for the dedicated campaign}
-The following figures intentionally contain no observations in
-this version. Each caption defines a planned comparison rather
-than interpreting a result. The plot files will be generated only
-from qualified benchmark data.
-
-\pendingfigure{plot_dense_sparse_by_dimension.pdf}
-{Dense and sparse products across feasible dimensions.}
-{Planned comparison of complete-product time and memory across
-dimension and support density; preparation and resource rejections
-will be shown separately.}{fig:dense-sparse}
-
-\pendingfigure{plot_targeted_and_grade.pdf}
-{Requested coefficients and grade-restricted products.}
-{Planned comparison of direct, grade-filtered, recursive, and join
-routes for identical requested outputs.}{fig:targeted-grade}
-
-\pendingfigure{plot_reuse_workspace_cache.pdf}
-{Preparation, workspace ownership, and cache policy across reuse
-horizons.}
-{Planned complete-episode comparison including plan construction,
-workspace memory, cache metadata, and owned-output copying.}
-{fig:reuse}
-
-\pendingfigure{plot_structural_high_dimension.pdf}
-{Certified structure in sparse high-dimensional tasks.}
-{Planned comparison of binary rank, active subspace, factorization,
-compact representations, and exact fallback under their respective
-certificates.}{fig:structural}
-
-\pendingfigure{plot_cpu_gpu_residency.pdf}
-{CPU threads, processes, and GPU with explicit host and resident
-contracts.}
-{Planned complete-episode comparison that includes transfers,
-launches, synchronization, and output ownership.}{fig:parallel}
-
-\pendingfigure{plot_cpp_julia_matched.pdf}
-{Matched C++ and Julia implementations.}
-{Planned paired comparison after algorithm, layout, precision,
-preparation, and output contracts are matched.}{fig:matched}
-
-\pendingfigure{plot_approximate_trajectory.pdf}
-{Approximate recurrence only; excluded from exact-product rankings.}
-{Planned display of elapsed time together with trajectory error,
-bias, and rare-event behavior for explicit approximate contracts.}
-{fig:approximate}
-
-\pendingfigure{qualified_ega3_vector_libraries.pdf}
-{EGA3 library comparison awaiting the dedicated benchmark run.}
-{Planned whole-library comparison of Garamon.jl, GAL, and Versor
-on identical vector-product requests. Different internal strategies
-will be identified; this is not a language-effect experiment.}
-{fig:external-ga}
 
 \section{Discussion and conclusion}
 The proposed palette is useful only if admission checks connect

@@ -47,6 +47,17 @@ function technique_smoke_config(row;benchmark_root=dirname(@__DIR__))
     config
 end
 
+function include_technique_adapter(adapter,config)
+    julia_root=get(configured_repositories(config),"julia",nothing)
+    if isnothing(julia_root)
+        Base.include(Main,adapter)
+    else
+        withenv("GARAMON_JULIA_ROOT"=>julia_root) do
+            Base.include(Main,adapter)
+        end
+    end
+end
+
 """A dedicated-machine grid for each implemented route. The smoke case only
 selects its strategy and operation; dimensions, signatures and horizons stay
 available for the later benchmark. Planning executes no workload.
@@ -60,8 +71,13 @@ function technique_bench_config(row;benchmark_root=dirname(@__DIR__))
     end
     # LRU does not use the roulette exponent. Keep the same two-plan traces
     # and seeds as roulette, without repeating identical LRU measurements.
-    row["id"]=="10" && haskey(config["grid"],"eviction_exponent") &&
+    row["id"] in ("10","12","13") &&
+        haskey(config["grid"],"eviction_exponent") &&
         (config["grid"]["eviction_exponent"]=[1.0])
+    row["id"] in ("10","11","13") &&
+        (config["grid"]["frequency_slots"]=[256])
+    row["id"] in ("10","12","13") &&
+        (config["grid"]["draw_seed"]=[first(config["grid"]["draw_seed"])])
     config["campaign"]["backend"]="benchmarktools"
     config["campaign"]["condition"]="isolated"
     config["campaign"]["interference_label"]=""
@@ -113,7 +129,7 @@ function technique_profile_request(row;benchmark_root=dirname(@__DIR__))
     # 50 × 64 finished before the sampling profiler saw a useful stack.
     # The process route is slower under Profile; 50 × 64 and 50 × 16 exceeded
     # the 120 s collector limit.
-    episode_repetitions=row["id"] in ("10","11","33") ? 1024 :
+    episode_repetitions=row["id"] in ("10","11","12","13","33") ? 1024 :
         row["id"] in ("17","24","25","30") ? 512 : row["id"]=="28" ? 4 :
         long_cpu_episode ? 4096 : 64
     profile_repetitions=row["id"]=="28" ? 20 :
@@ -275,13 +291,14 @@ function run_technique_bench(preflight,output;ids=String[])
         else
             try
                 technique_smoke_evidence(row,preflight;benchmark_root=root)
+                config=technique_bench_config(row;benchmark_root=root)
                 adapter=joinpath(root,row["adapter"])
                 if !(adapter in included)
-                    Base.include(Main,adapter)
+                    include_technique_adapter(adapter,config)
                     push!(included,adapter)
                 end
                 Base.invokelatest(run_resumable_campaign,
-                    technique_bench_config(row;benchmark_root=root);output=directory)
+                    config;output=directory)
                 result["status"]="complete"
                 result["archive"]=directory
             catch exception
@@ -336,12 +353,12 @@ function run_technique_smoke(output;ids=String[])
             result["threads"]=row["threads"]
         else
             try
+                config=technique_smoke_config(row;benchmark_root=root)
                 adapter=joinpath(root,row["adapter"])
                 if !(adapter in included)
-                    Base.include(Main,adapter)
+                    include_technique_adapter(adapter,config)
                     push!(included,adapter)
                 end
-                config=technique_smoke_config(row;benchmark_root=root)
                 Base.invokelatest(run_resumable_campaign,config;output=directory)
                 audit=audit_resumable_archive(config,directory)
                 audit["archive_integrity"]=="validated" &&
