@@ -1,0 +1,32 @@
+schema_version = 1
+
+[campaign]
+condition = "exploratory_interference"
+interference_label = "correctness_only_other_desktop_processes_possible"
+backend = "oracle_preflight"
+seed = 20260930
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+
+[case_defaults]
+adapter = "garamon_filtered_sign"
+family = "exact_target_coefficient_sign"
+oracle = "independent_signed_blade_pair_BigInt_sum"
+output_contract = "owned_sequence_of_certified_exact_signs"
+
+[grid]
+dimension = [2, 3, 4, 5, 6, 8, 16, 32, 65, 129]
+mode = ["prepared", "oneshot", "direct_bigint"]
+signature = ["positive", "mixed", "degenerate"]
+cancellation = ["ordinary", "near_zero", "exact_zero"]
+coefficient_bits = [8, 64, 128]
+horizon = [1, 64, 1024]
+
+[limits]
+max_cases = 2430
+case_seconds = 600
+controller_rss_bytes = 4294967296
+build_disk_bytes = 268435456
+source_snapshot_bytes = 67108864
+archive_bytes = 268435456

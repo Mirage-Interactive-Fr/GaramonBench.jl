@@ -1,5 +1,5 @@
 const TECHNIQUE_STATES=Set(["implemented","prototype","research"])
-const TECHNIQUE_CONTRACTS=Set(["exact","approximate","orchestration"])
+const TECHNIQUE_CONTRACTS=Set(["exact","approximate","decision","orchestration"])
 const COMPATIBILITY_CODES=Set(["O","?","X1","—"])
 
 """Read and check all 46 declared techniques without claiming runtime readiness."""

@@ -610,12 +610,23 @@ signed blade pairs directly. These comparisons establish whether and
 where the modular route repays preparation, without claiming a speed
 advantage before the dedicated run.
 
-A filtered
-adaptive-precision predicate can use a cheap sign computation
-when a proven error interval excludes zero and invoke an exact
-fallback otherwise~\cite{cgalfiltered}. This is a decision
-contract: it must not silently replace a request for a full
-multivector. Certificates need to propagate through representation
+A filtered predicate answers a narrower question than the complete
+product: the exact sign of one requested coefficient. For integer
+coefficients and a diagonal integer metric, a structural plan joins
+only blade pairs whose XOR is the requested mask. The first execution
+pass converts every operand and structural factor to 128-bit integers
+and uses checked multiplication and addition. If all checks succeed,
+the integer sum and its sign are exact. If any conversion or operation
+overflows, the entire coefficient is recomputed from the same paths
+using arbitrary precision integers. This is an integer analogue of
+filtered exact predicates with a certified fallback~\cite{cgalfiltered};
+it does not use an unproven floating-point tolerance. Preparation,
+checked execution, and fallback cost are measured separately across
+ten dimensions, metric signatures, coefficient sizes, cancellation
+regimes, and reuse horizons. A direct arbitrary precision coefficient
+sum is the same-contract baseline, with identical seeded inputs.
+The decision API must not silently replace a request for a full
+multivector. Certificates also need to propagate through representation
 changes, plan reuse, and recurrence steps; a lost precondition
 causes revalidation or fallback.
 

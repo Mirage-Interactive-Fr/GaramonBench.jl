@@ -527,10 +527,15 @@ preflight_smoke = {dimension = 4, signature = "mixed", mode = "prepared", coeffi
 [[technique]]
 id = "45"
 name = "filtered-adaptive-precision"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+contract = "decision"
+source = "src/filtered.jl"
+test = "test/filtered.jl"
 campaign = ""
+preflight_config = "config/filtered_sign_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_filtered_sign.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, mode = "prepared", signature = "positive", cancellation = "ordinary", coefficient_bits = 8, horizon = 1}
 
 [[technique]]
 id = "46"

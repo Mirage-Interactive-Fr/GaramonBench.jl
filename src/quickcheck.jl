@@ -137,7 +137,7 @@ function technique_profile_request(row;benchmark_root=dirname(@__DIR__))
     # Instrumentation creates descendant processes whose aggregate RSS can be
     # much larger than the kernel's live data. These ceilings are sequential
     # and explicit: the 65D indexing route crossed 4 GiB even at 100 × 512.
-    profile_rss_bytes=row["id"]=="30" ? 6<<30 : row["id"] in ("38","39") ? 5<<30 :
+    profile_rss_bytes=row["id"]=="30" ? 6<<30 : row["id"] in ("38","39","45") ? 5<<30 :
         row["id"] in ("15","17","24","25","K3") ? 4<<30 : 3<<30
     Dict{String,Any}("schema_version"=>1,
         "profiling"=>Dict{String,Any}(

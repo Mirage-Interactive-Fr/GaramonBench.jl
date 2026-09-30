@@ -37,8 +37,9 @@ function _profile_plan_loaded(input)
     case=only(selected)
     root=dirname(@__DIR__)
     smoke=filter(row->row["status"]=="runnable" &&
-        row["case_id"]==case_id(case) &&
-        abspath(joinpath(root,row["config"]))==casefile,
+        abspath(joinpath(root,row["config"]))==casefile &&
+        all(get(row["case"],key,nothing)==get(case,key,nothing)
+            for key in ("adapter","strategy","operation")),
         technique_smoke_plan(;benchmark_root=root))
     length(smoke)<=1 || error("ambiguous technique profile registration")
     generic_adapter=isempty(smoke) ? nothing :
