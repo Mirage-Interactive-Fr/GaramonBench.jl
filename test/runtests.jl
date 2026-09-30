@@ -7,6 +7,7 @@ include("techniques.jl")
 include("givens_basis_change_oracle_preflight.jl")
 include("signed_disjoint_oracle_preflight.jl")
 include("filtered_sign_oracle_preflight.jl")
+include("propagated_certificates_oracle_preflight.jl")
 
 @testset "article has empty result slots until a qualified run" begin
     source=joinpath(pkgdir(GaramonBench),"papers",

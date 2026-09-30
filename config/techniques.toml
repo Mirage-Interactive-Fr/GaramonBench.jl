@@ -540,11 +540,15 @@ preflight_smoke = {dimension = 4, mode = "prepared", signature = "positive", can
 [[technique]]
 id = "46"
 name = "propagated-structural-certificates"
-state = "research"
+state = "prototype"
 contract = "orchestration"
-source = ""
-test = ""
+source = "src/certificates.jl"
+test = "test/certificates.jl"
 campaign = ""
+preflight_config = "config/propagated_certificates_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_propagated_certificates.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, mode = "certified", regime = "stable", signature = "positive", support = 2, horizon = 1}
 
 [[combination]]
 id = "K1"

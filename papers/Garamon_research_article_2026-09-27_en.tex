@@ -626,9 +626,27 @@ ten dimensions, metric signatures, coefficient sizes, cancellation
 regimes, and reuse horizons. A direct arbitrary precision coefficient
 sum is the same-contract baseline, with identical seeded inputs.
 The decision API must not silently replace a request for a full
-multivector. Certificates also need to propagate through representation
-changes, plan reuse, and recurrence steps; a lost precondition
-causes revalidation or fallback.
+multivector.
+
+For a repeated three-input chain, a structural certificate can be
+propagated through an intermediate product. The first prepared plan
+enumerates every potentially nonzero output mask from its operand
+supports and metric. Those masks, treated as a support upper bound,
+form the left input of the second prepared plan. Numerical cancellation
+may remove intermediate masks, but it cannot create a mask outside this
+upper bound. The second execution therefore accepts a subset of its
+certified input support while evaluating every retained path. Both
+plans snapshot the basis, metric and operand supports. A changed input
+support or metric invalidates the certificate; the specified fallback
+computes the complete chain directly. This extends the idea of
+reusable structural work in sparse computation~\cite{sparseworkspace}
+to a multi-step algebraic dependency with explicit invalidation.
+The campaign compares preparation and repeated execution against the
+same direct chain under shared seeds, across ten dimensions, metric
+signatures, support sizes and stable, cancelling, support-changing and
+metric-changing episodes. It records the number of fallbacks and the
+gap between predicted and actual intermediate support. The figure
+remains provisional until an isolated run.
 
 \techniqueplot{44}{Multimodular reconstruction}{Prime count, modular products, CRT bounds, and exact reconstruction.}
 \techniqueplot{45}{Filtered adaptive precision}{Certified fast decisions, near-zero fallbacks, and total decision time.}
