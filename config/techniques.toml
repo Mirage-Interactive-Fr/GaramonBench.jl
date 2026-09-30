@@ -294,10 +294,15 @@ preflight_smoke = {dimension = 4, support_count = 4, left_pattern = "fixed", pre
 [[technique]]
 id = "23"
 name = "egraph-rewriting"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/egraph.jl"
+test = "test/egraph.jl"
 campaign = ""
+preflight_test = "test/egraph_oracle_preflight.jl"
+preflight_config = "config/egraph_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_egraph.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, support_count = 2, factor_count = 3, support_pattern = "fixed", preparation = "prebuilt", horizon = 1}
 
 [[technique]]
 id = "24"

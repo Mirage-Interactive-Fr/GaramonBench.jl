@@ -500,14 +500,32 @@ without data.
 An expression DAG can share a subexpression within one evaluation
 when purity and dependencies are known. Memoizing its numeric value
 across evaluations additionally requires invalidation when input
-coefficients change. An e-graph may expose equivalent
-representations and evaluation orders~\cite{egg}, but a rewrite has
-to preserve the metric-specific algebraic identity, output request,
-and declared floating-point semantics. The cost of searching and
-extracting a plan belongs to preparation.
+coefficients change. Equality saturation~\cite{egg} can retain several
+equivalent representations before choosing an evaluation order. Our
+bounded implementation uses a restricted e-graph: each interval of a
+noncommutative product chain is an equivalence class containing every
+contiguous binary split. Associativity makes these splits equivalent
+for exact Clifford arithmetic; the implementation does not rewrite
+factor order or apply floating-point associativity. A dynamic program
+extracts the split with the smallest conservative sum of support-pair
+counts. Its support sets include every blade mask reachable under a
+diagonal integral metric, disregarding possible numeric cancellation.
+The resulting plan accepts coefficient updates only while supports
+and the metric remain fixed. Candidate and support budgets refuse
+unbounded preparation rather than silently dropping terms.
+
+The campaign varies ten dimensions, factor count, support width and
+change pattern, plan preparation, and episode horizon. It compares
+the complete accumulated output with the ordinary left-associated
+Garamon.jl product chain on identical seeded inputs. Preparation,
+evaluation, retained plan storage, and full-episode cost are separate
+observations; identical baseline scenarios reuse their archived
+baseline measurement. An independent exact blade-word enumeration
+checks the output before timing. The figure remains provisional until
+isolated measurements qualify.
 
 \techniqueplot{16}{Expression DAG}{Shared subexpressions, invalidations, and total episode cost.}
-\techniqueplot{23}{E-graph rewriting}{Verified rewrite search, extraction, compilation, and execution.}
+\techniqueplot{23}{E-graph rewriting}{Bounded associative saturation, support-cost extraction, plan preparation, full-output execution, and shared baseline.}
 
 The exterior product can be written as a signed disjoint convolution:
 for each output mask $S$, sum $\epsilon(A,S\setminus A)x_Ay_{S\setminus A}$
