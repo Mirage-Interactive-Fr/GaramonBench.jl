@@ -519,10 +519,15 @@ campaign = ""
 [[technique]]
 id = "43"
 name = "adaptive-radix-tree"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/adaptive_radix.jl"
+test = "test/adaptive_radix.jl"
 campaign = ""
+preflight_test = "test/adaptive_radix_oracle_preflight.jl"
+preflight_config = "config/adaptive_radix_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_adaptive_radix.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 6, signature = "mixed", support_shape = "clustered", mutation = "stable", index_policy = "prebuilt", horizon = 1}
 
 [[technique]]
 id = "44"

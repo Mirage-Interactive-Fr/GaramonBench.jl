@@ -132,14 +132,14 @@ function technique_profile_request(row;benchmark_root=dirname(@__DIR__))
     # The process route is slower under Profile; 50 × 64 and 50 × 16 exceeded
     # the 120 s collector limit.
     episode_repetitions=row["id"] in ("10","11","12","13","33") ? 1024 :
-        row["id"] in ("17","24","25","30","32","36","37","38","39","46") ? 512 : row["id"]=="28" ? 4 :
+        row["id"] in ("17","24","25","30","32","36","37","38","39","43","46") ? 512 : row["id"]=="28" ? 4 :
         long_cpu_episode ? 4096 : 64
     profile_repetitions=row["id"]=="28" ? 20 :
         row["id"]=="25" ? 100 : long_cpu_episode ? 100 : 50
     # Instrumentation creates descendant processes whose aggregate RSS can be
     # much larger than the kernel's live data. These ceilings are sequential
     # and explicit: the 65D indexing route crossed 4 GiB even at 100 × 512.
-    profile_rss_bytes=row["id"]=="30" ? 6<<30 : row["id"] in ("32","36","37","38","39","45","46") ? 5<<30 :
+    profile_rss_bytes=row["id"]=="30" ? 6<<30 : row["id"] in ("32","36","37","38","39","43","45","46") ? 5<<30 :
         row["id"] in ("15","17","24","25","K3") ? 4<<30 : 3<<30
     Dict{String,Any}("schema_version"=>1,
         "profiling"=>Dict{String,Any}(

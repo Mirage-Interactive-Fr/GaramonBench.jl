@@ -36,6 +36,8 @@ register_adapter!(BenchmarkAdapter(name="garamon_cpu_threaded_packed",
     generate=ctp_generate, prepare=ctp_prepare, execute=ctp_execute,
     baseline_execute=state->gb_execute_vectors_baseline(state.base),
     baseline_name="garamon_julia_direct_product",
+    baseline_scenario=(state,case)->gb_baseline_scenario(state.base,case),
+    baseline_output_identity=gb_baseline_output_identity,
     oracle=(state,result)->size(result)==size(state.base.fixture.expected) &&
         result==state.base.fixture.expected,
     contract="owned Float64 matrix extracted from reusable CPU packed output",

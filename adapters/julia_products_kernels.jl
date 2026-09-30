@@ -1,3 +1,18 @@
+using SHA
+
+function gb_baseline_scenario(state,case)
+    fixture=state.fixture
+    Dict{String,Any}(
+        "family"=>"vector_product_full_coefficients",
+        "dimension"=>fixture.n,"horizon"=>fixture.horizon,
+        "diagonal"=>fixture.diagonal,
+        "output_masks"=>string.(fixture.output_masks),
+        "coefficients"=>[vcat(pair[1],pair[2]) for pair in fixture.coefficients])
+end
+
+gb_baseline_output_identity(result)=
+    bytes2hex(sha256(collect(reinterpret(UInt8,vec(result)))))
+
 function gb_generate_vectors(case,directory,rng)
     n=case["dimension"]; 2<=n<=128 || error("dimension budget")
     horizon=case["horizon"]; 1<=horizon<=1024 || error("horizon budget")

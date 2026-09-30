@@ -113,6 +113,20 @@ end
         @test calls[]==measured_calls
         @test count(row->row.phase=="baseline_warm",second_rows)==0
         @test count(row->row.phase=="warm",second_rows)==3
+        other_adapter=BenchmarkAdapter(name="another_strategy_same_scenario",
+            generate=adapter.generate,execute=adapter.execute,
+            baseline_execute=adapter.baseline_execute,
+            baseline_name=adapter.baseline_name,
+            baseline_scenario=adapter.baseline_scenario,
+            baseline_output_identity=adapter.baseline_output_identity,
+            oracle=adapter.oracle,contract=adapter.contract)
+        third=merge(first,Dict("adapter"=>other_adapter.name,
+            "strategy"=>"candidate_c"))
+        third_rows,third_verdict=GaramonBench.run_case(other_adapter,third,limits;
+            baseline_cache=cache)
+        @test third_verdict["baseline_cache_hit"]
+        @test calls[]==measured_calls
+        @test count(row->row.phase=="baseline_warm",third_rows)==0
         changed=merge(second,Dict("seed"=>18))
         _,changed_verdict=GaramonBench.run_case(adapter,changed,limits;baseline_cache=cache)
         @test !changed_verdict["baseline_cache_hit"]
