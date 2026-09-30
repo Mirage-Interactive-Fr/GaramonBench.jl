@@ -46,6 +46,20 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_materialized_trie",
     generate=mt21_generate, prepare=mt21_prepare, execute=mt21_execute,
+    baseline_prepare=state->begin
+        f=state.fixture
+        ga=algebra(f.n,:ega)
+        (;fixture=f,
+            left=multivector(ga,Dict(mask=>Float64(value)
+                for (mask,value) in f.left);storage=:sparse),
+            right=multivector(ga,Dict(mask=>Float64(value)
+                for (mask,value) in f.right);storage=:sparse))
+    end,
+    baseline_execute=state->begin
+        product=wedge(state.left,state.right)
+        Float64[coefficient_mask(product,mask) for mask in 0:(1<<state.fixture.n)-1]
+    end,
+    baseline_name="garamon_julia_sparse_direct_wedge",
     oracle=(state,result)->result == state.fixture.expected,
     contract="owned Float64 vector of every 6D ordered-blade coefficient",
     capabilities=Dict("exact_oracle"=>"independent Int64 mask-pair disjointness and inversion parity",

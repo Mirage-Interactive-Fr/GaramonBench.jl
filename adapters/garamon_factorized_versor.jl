@@ -44,8 +44,29 @@ function fv17_execute(state)
     FV17[coefficient(transformed, indices) for indices in state.fixture.masks]
 end
 
+function fv17_baseline_prepare(state)
+    ga=state.blade.algebra
+    normal_mvs=[multivector(ga,Dict(UInt64(1)<<(i-1)=>state.fixture.normals[i,j]
+        for i in 1:4 if !iszero(state.fixture.normals[i,j]));storage=:sparse)
+        for j in axes(state.fixture.normals,2)]
+    (;base=expand(state.blade),normal_mvs,masks=state.fixture.masks)
+end
+
+function fv17_baseline_execute(state)
+    value=state.base
+    for normal in state.normal_mvs
+        # A grade-two blade has even reflection parity, so u*B*u^-1 is
+        # the reflected blade for each non-null normal u.
+        value=geometric_product(geometric_product(normal,value),inv(normal))
+    end
+    FV17[coefficient(value,indices) for indices in state.masks]
+end
+
 register_adapter!(BenchmarkAdapter(name="garamon_factorized_versor",
     generate=fv17_generate, prepare=fv17_prepare, execute=fv17_execute,
+    baseline_prepare=fv17_baseline_prepare,
+    baseline_execute=fv17_baseline_execute,
+    baseline_name="garamon_julia_full_versor_product",
     oracle=(state, result)->result == state.fixture.expected,
     contract="owned exact rational coefficients of every grade-two blade",
     capabilities=Dict("exact_oracle"=>"independent rational reflection and two-by-two minors",

@@ -85,3 +85,13 @@ function gb_execute_vectors(state)
     end
     output
 end
+
+function gb_execute_vectors_baseline(state)
+    fixture=state.fixture
+    output=Matrix{Float64}(undef,length(fixture.output_masks),fixture.horizon)
+    for t in 1:fixture.horizon
+        result=geometric_product(state.inputs[t]...)
+        gb_copy_coefficients!(output,t,fixture.output_masks,result)
+    end
+    output
+end

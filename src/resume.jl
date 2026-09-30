@@ -138,6 +138,30 @@ function _resume_verify_case(directory,case,signature,samples_expected;
         warm=count(line->split(line,',';limit=3)[2]=="warm",lines[2:end])
         warm==samples_expected && marker["warm_samples"]==samples_expected ||
             error("completed case sample count invalid: "*id)
+        if get(case,"baseline_required",false)
+            baseline=count(line->split(line,',';limit=3)[2]=="baseline_warm",lines[2:end])
+            cache_valid=false
+            if haskey(verdict,"baseline_cache_file")
+                reference=verdict["baseline_cache_file"]
+                prefix="../../../_baselines/"
+                if startswith(reference,prefix) &&
+                   occursin(r"^[0-9a-f]{64}\.toml$",reference[length(prefix)+1:end])
+                    path=normpath(joinpath(directory,reference))
+                    cache_valid=isfile(path) &&
+                        _resume_sha(path)==verdict["baseline_cache_sha256"] &&
+                        length(TOML.parsefile(path)["time_ns"])==samples_expected
+                end
+            end
+            (baseline==samples_expected || baseline==0 && cache_valid &&
+                get(verdict,"baseline_cache_hit",false)===true) &&
+                verdict["baseline_required"]===true &&
+                verdict["baseline_oracle_passed"]===true &&
+                verdict["baseline_samples_verified"]==samples_expected &&
+                verdict["baseline_name"]!="none" ||
+                error("completed case baseline evidence invalid: "*id)
+            haskey(verdict,"baseline_cache_file") && !cache_valid &&
+                error("shared baseline artifact invalid: "*id)
+        end
     end
     get(marker,"diagnostic_artifacts",Any[])==_resume_artifacts(directory) ||
         error("completed case diagnostic artifact changed: "*id)
@@ -334,7 +358,7 @@ end
 audit_resumable_archive(path::AbstractString,output)=
     audit_resumable_archive(load_config(path),output)
 
-function run_resumable_campaign(config;output,on_progress=nothing)
+function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache_root=nothing)
     cases=expand_cases(config)
     backend=get(config["campaign"],"backend","")
     backend in ("perfchecker","benchmarktools","oracle_preflight") ||
@@ -342,11 +366,23 @@ function run_resumable_campaign(config;output,on_progress=nothing)
     all(c->haskey(ADAPTERS,c["adapter"]),cases) ||
         error("load every requested adapter before launch")
     output=abspath(output)
+    if !isnothing(baseline_cache_root)
+        backend=="benchmarktools" || error("shared baselines require BenchmarkTools")
+        abspath(baseline_cache_root)==joinpath(dirname(output),"_baselines") ||
+            error("shared baselines must be beside the route archive")
+    end
     mkpath(output)
     _resume_lock(output) do
         limits=get(config,"limits",Dict())
         manifest=_resume_prepare(output,config,cases,limits)
         signature=manifest["run_signature"]
+        baseline_cache=isnothing(baseline_cache_root) ? nothing :
+            (root=abspath(baseline_cache_root),context=Dict{String,Any}(
+                "sources"=>Dict(k=>v["sha256"] for (k,v) in manifest["repositories"]),
+                "machine"=>manifest["machine"]["sha256"],
+                "environment"=>manifest["environment"],
+                "condition"=>manifest["condition"],
+                "threads"=>Threads.nthreads()))
         samples=get(limits,"samples",11)
         completed=_resume_progress(output,cases,signature,samples;backend)
         _resume_write(joinpath(output,"progress.toml"),
@@ -368,7 +404,8 @@ function run_resumable_campaign(config;output,on_progress=nothing)
                 rows,verdict=if backend=="oracle_preflight"
                     NamedTuple[],run_case_preflight(ADAPTERS[case["adapter"]],case,limits)
                 elseif backend=="benchmarktools"
-                    run_case(ADAPTERS[case["adapter"]],case,limits;artifact_dir=stage)
+                    run_case(ADAPTERS[case["adapter"]],case,limits;
+                        artifact_dir=stage,baseline_cache)
                 else
                     run_case_perfchecker(ADAPTERS[case["adapter"]],case,limits;
                         artifact_dir=stage)

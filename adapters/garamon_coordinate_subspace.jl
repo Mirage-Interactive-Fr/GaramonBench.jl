@@ -77,6 +77,12 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_coordinate_subspace",
     generate=cs_generate,prepare=cs_prepare,execute=cs_execute,oracle=cs_oracle,
+    baseline_execute=state->begin
+        result=state.fixture.operation==:wedge ? wedge(state.a,state.b) :
+            geometric_product(state.a,state.b)
+        Float64[coefficient_mask(result,mask) for mask in state.fixture.targets]
+    end,
+    baseline_name="garamon_julia_full_direct_product",
     contract="owned Float64 vector of every structural product coefficient in mask order",
     capabilities=Dict("exact_oracle"=>"independent Int64 Clifford-word inversions and diagonal intersections",
         "active_directions"=>"1,3,n in ambient dimensions 4 and 65",

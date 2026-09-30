@@ -11,7 +11,9 @@ include("propagated_certificates_oracle_preflight.jl")
 include("invariant_sectors_oracle_preflight.jl")
 include("cross_gram_oracle_preflight.jl")
 include("fermionic_gaussian_oracle_preflight.jl")
+include("precompile_catalogue_oracle_preflight.jl")
 include("bench_cleanup.jl")
+include("paired_baseline.jl")
 
 @testset "article distinguishes preflight cards from qualified results" begin
     source=joinpath(pkgdir(GaramonBench),"papers",

@@ -128,9 +128,23 @@ function pc15_oracle(state, result)
         result == state.expected
 end
 
+function pc15_baseline_prepare(state)
+    ga=algebra(3,:ega)
+    left=multivector(ga,Dict(UInt64(i)=>Float64(1+mod(i+1,3))
+        for i in 0:7);storage=:dense)
+    right=multivector(ga,Dict(UInt64(i)=>Float64(1+mod(2*(i+1),3))
+        for i in 0:7);storage=:dense)
+    (;left,right)
+end
+
+pc15_baseline_execute(state)=dense(geometric_product(state.left,state.right)).values
+
 register_adapter!(BenchmarkAdapter(name="garamon_precompile_catalogue",
     generate=pc15_generate, build=pc15_build, prepare=pc15_prepare,
     execute=pc15_execute, oracle=pc15_oracle, cleanup=pc15_cleanup,
+    baseline_prepare=pc15_baseline_prepare,
+    baseline_execute=pc15_baseline_execute,
+    baseline_name="garamon_julia_direct_geometric_product",
     contract="owned Float64 vector of all EGA3 generated-product coefficients",
     capabilities=Dict("exact_oracle"=>"independent Int64 Clifford-word inversions",
         "precompilation"=>"native catalogue cache in disposable isolated depot",

@@ -92,6 +92,18 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_binary_rank_compact_workspace",
     generate=k1_generate,prepare=k1_prepare,execute=k1_execute,
+    baseline_execute=state->begin
+        f=state.fixture
+        output=Matrix{Float64}(undef,length(f.targets),length(state.inputs))
+        for (t,(a,b)) in enumerate(state.inputs)
+            product=geometric_product(a,b)
+            for (i,mask) in enumerate(f.targets)
+                output[i,t]=coefficient_mask(product,mask)
+            end
+        end
+        output
+    end,
+    baseline_name="garamon_julia_direct_product",
     oracle=(state,result)->size(result)==size(state.fixture.expected) &&
         result==state.fixture.expected,
     contract="owned Float64 matrix of every reachable ambient coefficient for two products",

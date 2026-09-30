@@ -130,6 +130,10 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_invariant_sectors",
     generate=ps_generate,prepare=ps_prepare,execute=ps_execute,
+    baseline_execute=state->ps_execute(merge(state,
+        (fixture=merge(state.fixture,(mode="direct",)),
+            plan=nothing,fallbacks=Ref(0)))),
+    baseline_name="garamon_julia_direct_product",
     oracle=ps_check,
     contract="exact requested parity of a geometric product via grade-involution sectors or full direct fallback",
     capabilities=Dict(

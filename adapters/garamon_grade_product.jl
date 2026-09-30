@@ -116,6 +116,9 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_grade_product",
     generate=gg_generate,prepare=gg_prepare,execute=gg_execute,
+    baseline_execute=state->gg_execute(merge(state,
+        (fixture=merge(state.fixture,(strategy="full",)),))),
+    baseline_name="garamon_julia_direct_grade_product",
     oracle=(state,result)->size(result)==size(state.fixture.expected) &&
         result==state.fixture.expected,
     contract="owned Float64 matrix of all structurally possible homogeneous-grade outputs",

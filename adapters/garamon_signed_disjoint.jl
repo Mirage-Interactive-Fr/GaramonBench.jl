@@ -59,6 +59,8 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_signed_disjoint",
     generate=sd_generate,prepare=sd_prepare,execute=sd_execute,oracle=sd_oracle,
+    baseline_execute=state->[wedge(a,b).values for (a,b) in state.inputs],
+    baseline_name="garamon_julia_direct_wedge",
     preflight_evidence=(state,result)->Dict{String,Any}(
         "mode"=>state.fixture.mode,"density"=>state.fixture.density,
         "coefficient_bits"=>state.fixture.bits,
@@ -69,4 +71,3 @@ register_adapter!(BenchmarkAdapter(name="garamon_signed_disjoint",
         "domains"=>"integer coefficients, dimension 2 through 11 in the campaign",
         "modes"=>"prepared,oneshot,pairwise",
         "generation_includes_oracle"=>false));replace=true)
-

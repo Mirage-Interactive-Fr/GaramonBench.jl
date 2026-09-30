@@ -33,6 +33,19 @@ GaramonBench.register_adapter!(GaramonBench.BenchmarkAdapter(
     end,
     execute=state->state.strategy=="gpu_host_owned" ?
         gpu_owned_matrix(state.resident) : run_packed_batch(state.batch),
+    baseline_execute=state->begin
+        fixture=state.fixture
+        masks=state.batch.plan.output_masks
+        output=Matrix{Float64}(undef,length(masks),state.horizon)
+        for column in 1:state.horizon
+            result=geometric_product(fixture.inputs[mod1(column,4)]...)
+            for (row,mask) in enumerate(masks)
+                output[row,column]=coefficient_mask(result,mask)
+            end
+        end
+        output
+    end,
+    baseline_name="garamon_julia_direct_geometric_product_batch",
     oracle=(state,result)->gpu_exact_oracle(
         state.fixture,state.batch,result,state.horizon),
     cleanup=state->begin

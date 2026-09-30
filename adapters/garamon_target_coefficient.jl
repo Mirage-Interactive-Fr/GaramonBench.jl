@@ -139,6 +139,8 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_target_coefficient",
     generate=tc_generate,prepare=tc_prepare,execute=tc_execute,
+    baseline_execute=state->tc_execute_strategy(state,Val(:full)),
+    baseline_name="garamon_julia_full_direct_product",
     oracle=(state,result)->size(result)==size(state.fixture.expected) &&
         result==state.fixture.expected,
     contract="owned Float64 matrix of selected coefficients for one exact binary product",

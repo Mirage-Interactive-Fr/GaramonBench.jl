@@ -164,6 +164,8 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_plan_cache",
     generate=pc_generate,prepare=pc_prepare,execute=pc_execute,oracle=pc_oracle,
+    baseline_execute=state->pc_execute(merge(state,(cache=nothing,))),
+    baseline_name="garamon_julia_direct_product",
     preflight_evidence=(state,result)->isnothing(state.cache) ?
         Dict{String,Any}("policy"=>"direct") : begin
             stats=cache_stats(state.cache)

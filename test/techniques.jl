@@ -69,6 +69,8 @@
     @test only(filter(row->row["id"]=="25",bench))["benchmark_cases"]==35
     @test all(GaramonBench.technique_bench_config(row)["campaign"]["backend"]=="benchmarktools"
         for row in bench if row["status"]=="runnable")
+    @test all(GaramonBench.technique_bench_config(row)["case_defaults"]["baseline_required"]===true
+        for row in bench if row["status"]=="runnable")
     profile_cases=String[]
     for row in runnable
         request=technique_profile_request(row)

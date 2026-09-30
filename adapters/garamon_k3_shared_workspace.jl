@@ -45,6 +45,17 @@ using GaramonBench
 register_adapter!(BenchmarkAdapter(name="garamon_k3_shared_workspace",
     generate=GaramonBenchK3.generate,prepare=GaramonBenchK3.prepare,
     execute=GaramonBenchK3.execute,oracle=GaramonBenchK3.oracle,
+    baseline_prepare=state->(;fixture=state.fixture,
+        ga=GaramonBenchK3.algebra(state.fixture.G)),
+    baseline_execute=state->begin
+        f=state.fixture
+        output=Matrix{GaramonBenchK3.Q}(undef,length(f.chains),length(f.pools))
+        for (t,pool) in enumerate(f.pools),(i,chain) in enumerate(f.chains)
+            output[i,t]=GaramonBenchK3.n05_garamon(state.ga,pool[:,chain],:full)
+        end
+        output
+    end,
+    baseline_name="garamon_julia_full_vector_chain",
     contract="owned exact rational scalar chain matrix with shared contractions",
     capabilities=Dict("exact_oracle"=>"independent Chevalley Clifford-word scalar expansion",
         "combination"=>"K3: Pfaffian, shared contraction DAG, retained workspace",

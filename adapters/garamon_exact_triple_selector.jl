@@ -27,6 +27,8 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_exact_triple_selector",
     generate=tj_generate,prepare=ts_prepare,execute=ts_execute,
+    baseline_execute=state->tj_execute(state.base),
+    baseline_name="garamon_julia_direct_nested_product",
     oracle=(state,result)->state.selected[] in
             (:full,:recursive,:join3,:prepared,:workspace) &&
         size(result)==size(state.base.fixture.expected) &&

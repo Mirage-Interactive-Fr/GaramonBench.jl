@@ -22,9 +22,16 @@ function case_guard(rows,start,limits)
     time()-start<=get(limits,"case_seconds",120) || error("case time budget")
 end
 
-function run_case(adapter,case,limits;capture_trial=Ref{Any}(nothing),artifact_dir=nothing)
+function _run_case_unlocked(adapter,case,limits;capture_trial=Ref{Any}(nothing),
+                            artifact_dir=nothing,baseline_cache=nothing)
     rows=NamedTuple[]; id=case_id(case); oracle_status=false
-    state=nothing; start=time(); disk_checkpoints=Int[]
+    baseline_required=get(case,"baseline_required",false)
+    baseline_required && (isnothing(adapter.baseline_execute) ||
+        isempty(adapter.baseline_name)) &&
+        error("a named Garamon.jl standard baseline is required for "*id)
+    state=nothing; baseline_state=nothing; start=time(); disk_checkpoints=Int[]
+    baseline_record=nothing; baseline_key=nothing; baseline_file=nothing
+    baseline_output_hash=nothing; baseline_cache_hit=false
     diagnostics=Dict{String,Any}()
     with_build_directory() do temporary
         try
@@ -35,8 +42,51 @@ function run_case(adapter,case,limits;capture_trial=Ref{Any}(nothing),artifact_d
             case_guard(rows,start,limits)
             state=measured_stage!(rows,id,"preparation",temporary,()->adapter.prepare(built,case,temporary))
             case_guard(rows,start,limits)
+            if baseline_required
+                if !isnothing(baseline_cache) && !isnothing(adapter.baseline_scenario)
+                    get(case,"baseline_equality_required",true) ||
+                        error("shared baseline currently requires identical exact outputs")
+                    isnothing(adapter.baseline_output_identity) &&
+                        error("shared baseline requires a full output identity")
+                    scenario=adapter.baseline_scenario(state,case)
+                    scenario isa AbstractDict || error("baseline scenario must be a dictionary")
+                    identity=Dict("context"=>baseline_cache.context,
+                        "scenario"=>scenario,"baseline_name"=>adapter.baseline_name,
+                        "samples"=>get(limits,"samples",11))
+                    baseline_key=bytes2hex(sha256(canonical_toml(identity)))
+                    baseline_file=joinpath(baseline_cache.root,baseline_key*".toml")
+                    if isfile(baseline_file)
+                        baseline_record=TOML.parsefile(baseline_file)
+                        baseline_record["identity"]==identity &&
+                            length(baseline_record["time_ns"])==get(limits,"samples",11) ||
+                            error("shared baseline identity or samples changed")
+                        baseline_cache_hit=true
+                    end
+                end
+                if !baseline_cache_hit
+                    baseline_state=measured_stage!(rows,id,"baseline_preparation",temporary,
+                        ()->adapter.baseline_prepare(state))
+                    case_guard(rows,start,limits)
+                end
+            end
             first=measured_stage!(rows,id,"first_execution",temporary,()->adapter.execute(state))
             adapter.oracle(state,first) === true || error("independent oracle rejected first output")
+            if baseline_cache_hit
+                adapter.baseline_output_identity(first)==baseline_record["output_sha256"] ||
+                    error("cached standard baseline has different output on this scenario")
+            elseif baseline_required
+                baseline_first=measured_stage!(rows,id,"baseline_first_execution",temporary,
+                    ()->adapter.baseline_execute(baseline_state))
+                baseline_check=isnothing(adapter.baseline_oracle) ? adapter.oracle :
+                    adapter.baseline_oracle
+                baseline_check(state,baseline_first) === true ||
+                    error("independent oracle rejected Garamon.jl baseline")
+                get(case,"baseline_equality_required",true) &&
+                    baseline_first!=first &&
+                    error("strategy and standard baseline returned different exact outputs")
+                !isnothing(baseline_file) &&
+                    (baseline_output_hash=adapter.baseline_output_identity(baseline_first))
+            end
             samples=get(limits,"samples",11)
             samples>=1 || error("sample count")
             # BenchmarkTools stops at either its sample count or its seconds
@@ -57,7 +107,39 @@ function run_case(adapter,case,limits;capture_trial=Ref{Any}(nothing),artifact_d
                     jit_code_bytes_delta="unmeasured",controller_peak_rss_bytes=Sys.maxrss(),
                     disk_checkpoint_bytes=tree_bytes(temporary)))
             end
+            if baseline_required && !baseline_cache_hit
+                remaining=get(limits,"case_seconds",120)-(time()-start)
+                remaining>0 || error("no case time remains for baseline samples")
+                baseline_trial=@benchmark $(adapter.baseline_execute)($baseline_state) samples=samples evals=1 seconds=remaining
+                length(baseline_trial.times)==samples ||
+                    error("baseline samples incomplete within case time budget")
+                for i in eachindex(baseline_trial.times)
+                    push!(rows,(;case_id=id,phase="baseline_warm",sample=i,
+                        time_ns=baseline_trial.times[i],gc_ns=baseline_trial.gctimes[i],
+                        allocated_bytes=baseline_trial.memory,
+                        allocation_scope="BenchmarkTools_estimate_not_per_sample",
+                        compile_ns="unmeasured",recompile_ns="unmeasured",
+                        jit_code_bytes_delta="unmeasured",controller_peak_rss_bytes=Sys.maxrss(),
+                        disk_checkpoint_bytes=tree_bytes(temporary)))
+                end
+                baseline_check(state,adapter.baseline_execute(baseline_state)) === true ||
+                    error("independent oracle rejected final Garamon.jl baseline")
+            end
             adapter.oracle(state,adapter.execute(state)) === true || error("independent oracle rejected final output")
+            if !isnothing(baseline_file) && !baseline_cache_hit
+                baseline_rows=[row for row in rows if row.phase=="baseline_warm"]
+                identity=Dict("context"=>baseline_cache.context,
+                    "scenario"=>adapter.baseline_scenario(state,case),
+                    "baseline_name"=>adapter.baseline_name,
+                    "samples"=>get(limits,"samples",11))
+                baseline_record=Dict{String,Any}(
+                    "identity"=>identity,"output_sha256"=>baseline_output_hash,
+                    "time_ns"=>[row.time_ns for row in baseline_rows],
+                    "gc_ns"=>[row.gc_ns for row in baseline_rows],
+                    "allocated_bytes"=>[row.allocated_bytes for row in baseline_rows],
+                    "source_case_id"=>id)
+                _resume_write(baseline_file,baseline_record)
+            end
             oracle_status=true
             if !isnothing(artifact_dir)
                 observed=adapter.diagnostics(state,case,artifact_dir)
@@ -71,14 +153,37 @@ function run_case(adapter,case,limits;capture_trial=Ref{Any}(nothing),artifact_d
             Sys.maxrss()<=get(limits,"controller_rss_bytes",2<<30) || error("controller RSS budget")
             time()-start<=get(limits,"case_seconds",120) || error("case time budget")
         finally
+            isnothing(baseline_state) || adapter.baseline_cleanup(baseline_state)
             isnothing(state) || adapter.cleanup(state)
         end
     end
-    return rows,Dict{String,Any}("case_id"=>id,"oracle_passed"=>oracle_status,
+    verdict=Dict{String,Any}("case_id"=>id,"oracle_passed"=>oracle_status,
+        "baseline_required"=>baseline_required,
+        "baseline_name"=>baseline_required ? adapter.baseline_name : "none",
+        "baseline_oracle_passed"=>baseline_required ? oracle_status : false,
+        "baseline_samples_verified"=>baseline_required ? get(limits,"samples",11) : 0,
         "contract"=>adapter.contract,"adapter_capabilities"=>adapter.capabilities,
         "temporary_build_removed"=>true,"disk_metric"=>"stage boundary observations; not continuous peak",
         "benchmark_backend"=>"BenchmarkTools", "case_elapsed_seconds"=>time()-start,
         "diagnostics"=>diagnostics)
+    if !isnothing(baseline_file)
+        verdict["baseline_cache_file"]=isnothing(artifact_dir) ? baseline_file :
+            relpath(baseline_file,artifact_dir)
+        verdict["baseline_cache_sha256"]=_resume_sha(baseline_file)
+        verdict["baseline_cache_hit"]=baseline_cache_hit
+    end
+    return rows,verdict
+end
+
+function run_case(adapter,case,limits;capture_trial=Ref{Any}(nothing),
+                  artifact_dir=nothing,baseline_cache=nothing)
+    if isnothing(baseline_cache)
+        return _run_case_unlocked(adapter,case,limits;capture_trial,artifact_dir)
+    end
+    mkpath(baseline_cache.root)
+    _resume_lock(baseline_cache.root) do
+        _run_case_unlocked(adapter,case,limits;capture_trial,artifact_dir,baseline_cache)
+    end
 end
 
 """Run the adapter contract twice and check both complete outputs, without

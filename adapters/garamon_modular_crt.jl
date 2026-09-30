@@ -125,6 +125,10 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_modular_crt",
     generate=mc_generate,prepare=mc_prepare,execute=mc_execute,
+    baseline_execute=state->mc_execute(merge(state,
+        (fixture=merge(state.fixture,(mode="direct_bigint",)),plan=nothing,
+            prime_counts=Ref(Int[]),fallbacks=Ref(0)))),
+    baseline_name="garamon_julia_direct_bigint_product",
     oracle=mc_oracle,
     preflight_evidence=(state,result)->Dict{String,Any}(
         "mode"=>state.fixture.mode,

@@ -119,6 +119,10 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_filtered_sign",
     generate=fs_generate,prepare=fs_prepare,execute=fs_execute,
+    baseline_execute=state->fs_execute(merge(state,
+        (fixture=merge(state.fixture,(mode="direct_bigint",)),plan=nothing,
+            fallbacks=Ref(0)))),
+    baseline_name="garamon_julia_direct_bigint_coefficient",
     oracle=fs_oracle,
     preflight_evidence=(state,result)->Dict{String,Any}(
         "mode"=>state.fixture.mode,

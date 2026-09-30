@@ -4,6 +4,7 @@ module GaramonBenchDeferredReplay
 include(joinpath(get(ENV,"GARAMON_JULIA_ROOT",
     joinpath(homedir(),".julia","dev","Garamon")),
     "perf","pruning_recurrences_common.jl"))
+include("pruning_standard_baseline.jl")
 
 function generate(case,directory,rng)
     case["dimension"]==2 && case["signature"]=="positive" &&
@@ -42,6 +43,9 @@ using GaramonBench
 register_adapter!(BenchmarkAdapter(name="garamon_deferred_exact_replay",
     generate=GaramonBenchDeferredReplay.generate,
     execute=GaramonBenchDeferredReplay.execute,
+    baseline_execute=state->GaramonBenchDeferredReplay.standard_pruning_history(state.fixture),
+    baseline_name="garamon_julia_full_exact_recurrence",
+    baseline_oracle=(state,result)->result==state.oracle,
     oracle=GaramonBenchDeferredReplay.oracle,
     preflight_evidence=(state,result)->Dict(
         "contract"=>"exact_after_terminal_checkpoint",

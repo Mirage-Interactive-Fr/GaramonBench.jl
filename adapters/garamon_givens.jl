@@ -81,6 +81,9 @@ end
 register_adapter!(BenchmarkAdapter(name="garamon_givens",
     generate=givens_bench_generate,prepare=givens_bench_prepare,
     execute=givens_bench_execute,oracle=givens_bench_oracle,
+    baseline_execute=state->[outermorphism(state.matrix,a,state.ga;
+        check_metric=false).values for a in state.inputs],
+    baseline_name="garamon_julia_full_outermorphism",
     preflight_evidence=(state,result)->Dict{String,Any}(
         "mode"=>state.fixture.mode,
         "rotation_count"=>state.fixture.steps,
@@ -93,4 +96,3 @@ register_adapter!(BenchmarkAdapter(name="garamon_givens",
         "domains"=>"Euclidean identity metric, exact rational coefficients and rotations",
         "modes"=>"factored,materialized",
         "generation_includes_oracle"=>false));replace=true)
-

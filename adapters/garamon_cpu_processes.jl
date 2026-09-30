@@ -82,6 +82,19 @@ function cp28_oracle(state,result)
         result.output==state.generated.expected
 end
 
+function cp28_baseline_execute(state)
+    fixture=state.generated.fixture
+    batch=state.generated.batch
+    output=Matrix{Float64}(undef,length(fixture.plan.output_masks),batch)
+    for t in 1:batch
+        product=geometric_product(fixture.inputs[mod1(t,4)]...)
+        for (i,mask) in enumerate(fixture.plan.output_masks)
+            output[i,t]=coefficient_mask(product,mask)
+        end
+    end
+    (;output)
+end
+
 function cp28_cleanup(state)
     state.pid in workers() || return nothing
     rmprocs(state.pid)
@@ -92,6 +105,9 @@ end
 register_adapter!(BenchmarkAdapter(name="garamon_cpu_processes",
     generate=cp28_generate,prepare=cp28_prepare,execute=cp28_execute,
     oracle=cp28_oracle,cleanup=cp28_cleanup,
+    baseline_execute=cp28_baseline_execute,
+    baseline_name="garamon_julia_direct_geometric_product_batch",
+    baseline_oracle=(state,result)->result.output==state.generated.expected,
     contract="owned Float64 packed coefficient matrix plus distinct worker identity",
     capabilities=Dict("exact_oracle"=>"independent Int64 Euclidean Clifford-word inversions",
         "execution"=>"one actual Distributed worker with resident workspace",

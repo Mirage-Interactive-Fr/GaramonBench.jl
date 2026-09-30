@@ -6,6 +6,7 @@ using Random
 include(joinpath(get(ENV,"GARAMON_JULIA_ROOT",
     joinpath(homedir(),".julia","dev","Garamon")),
     "perf","pruning_recurrences_common.jl"))
+include("pruning_standard_baseline.jl")
 
 function candidates(x,step)
     T=eltype(x)
@@ -125,6 +126,9 @@ using GaramonBench
 register_adapter!(BenchmarkAdapter(name="garamon_approximate_roulette",
     generate=GaramonBenchApproximateRoulette.generate,
     execute=GaramonBenchApproximateRoulette.execute,
+    baseline_execute=state->GaramonBenchApproximateRoulette.standard_pruning_history(state.fixture),
+    baseline_name="garamon_julia_full_exact_recurrence",
+    baseline_oracle=(state,result)->result==state.exact,
     oracle=GaramonBenchApproximateRoulette.oracle,
     preflight_evidence=(state,result)->begin
         metrics=GaramonBenchApproximateRoulette.errors(result.history,state.exact)

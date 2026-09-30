@@ -133,6 +133,10 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_propagated_certificates",
     generate=pc_generate,prepare=pc_prepare,execute=pc_execute,
+    baseline_execute=state->pc_execute(merge(state,
+        (fixture=merge(state.fixture,(mode="direct",)),
+            certificate=nothing,fallbacks=Ref(0)))),
+    baseline_name="garamon_julia_direct_nested_product",
     oracle=pc_oracle,
     preflight_evidence=(state,result)->Dict{String,Any}(
         "mode"=>state.fixture.mode,"regime"=>state.fixture.regime,
@@ -146,4 +150,3 @@ register_adapter!(BenchmarkAdapter(name="garamon_propagated_certificates",
         "modes"=>"certified,direct",
         "fallback"=>"direct exact chain after support, basis or metric invalidation",
         "generation_includes_oracle"=>true));replace=true)
-

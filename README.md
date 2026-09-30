@@ -152,6 +152,13 @@ profile output directory. Use `ids=["12", "13"]` on any of these functions to
 select routes. Registry entries still marked `research` are reported as such
 and are not measured. Run CPU routes from the package environment with their
 registered thread count; GPU routes require the package's `gpu/` environment.
+Routes that declare the same exact generated inputs share one measured
+Garamon.jl baseline. Its samples are stored under `benchmark/_baselines/` and
+referenced by later route cases, so the baseline is not measured again. Resume
+and archive audit verify the reference and its content hash. Transfer the
+complete `benchmark/` directory, including `_baselines/`, to preserve these
+references. Routes without a proved common input identity retain separate
+baseline measurements.
 Inspect `technique_bench_plan()` for route case counts before starting a large
 campaign. The article currently has 48 figure slots, one per registry entry.
 Preflight cards fill empty slots temporarily; only qualified completed

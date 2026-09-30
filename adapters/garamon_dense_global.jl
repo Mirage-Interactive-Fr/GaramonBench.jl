@@ -76,6 +76,10 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_dense_global",
     generate=dg_generate, prepare=dg_prepare, execute=dg_execute,
+    baseline_prepare=state->dg_prepare(merge(state.fixture,(storage="sparse",)),
+        nothing,nothing),
+    baseline_execute=dg_execute,
+    baseline_name="garamon_julia_sparse_direct_product",
     oracle=(state,result)->size(result)==size(state.fixture.expected) &&
         result==state.fixture.expected,
     contract="owned Float64 matrix of every mask coefficient in global order",

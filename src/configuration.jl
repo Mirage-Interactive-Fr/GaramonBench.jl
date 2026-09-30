@@ -5,7 +5,7 @@ const ADAPTERS = Dict{String,Any}()
 prepare(built,case,dir), execute(state), oracle(state,result), cleanup(state).
 `oracle` must check the full agreed result independently of the timed kernel.
 """
-Base.@kwdef struct BenchmarkAdapter{G,B,P,E,O,V,C,D,K}
+Base.@kwdef struct BenchmarkAdapter{G,B,P,E,O,V,C,D,K,L,BP,BC,BO,BS,BI}
     name::String
     generate::G
     build::B = (generated,case,dir)->generated
@@ -17,6 +17,13 @@ Base.@kwdef struct BenchmarkAdapter{G,B,P,E,O,V,C,D,K}
     diagnostics::D = (state,case,directory)->Dict{String,Any}()
     contract::String
     capabilities::K = Dict{String,Any}()
+    baseline_execute::L = nothing
+    baseline_name::String = ""
+    baseline_prepare::BP = identity
+    baseline_cleanup::BC = state->nothing
+    baseline_oracle::BO = nothing
+    baseline_scenario::BS = nothing
+    baseline_output_identity::BI = nothing
 end
 
 function register_adapter!(adapter::BenchmarkAdapter; replace=false)

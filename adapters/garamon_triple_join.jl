@@ -118,6 +118,9 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_triple_join",
     generate=tj_generate,prepare=tj_prepare,execute=tj_execute,
+    baseline_execute=state->tj_execute(merge(state,
+        (fixture=merge(state.fixture,(strategy="direct",)),))),
+    baseline_name="garamon_julia_direct_nested_product",
     oracle=(state,result)->size(result)==size(state.fixture.expected) &&
         result==state.fixture.expected,
     contract="owned Float64 matrix of selected (a*b)*c coefficients, fixed mask order",

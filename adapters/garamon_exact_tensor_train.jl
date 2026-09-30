@@ -62,6 +62,15 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_exact_tensor_train",
     generate=tt19_generate, prepare=tt19_prepare, execute=tt19_execute,
+    baseline_prepare=state->(;fixture=state.fixture,
+        left=expand(state.left;max_terms=1<<16),
+        right=expand(state.right;max_terms=1<<16)),
+    baseline_execute=state->begin
+        product=geometric_product(state.left,state.right)
+        n=state.fixture.n
+        Int64[coefficient_mask(product,mask) for mask in 0:(1<<n)-1]
+    end,
+    baseline_name="garamon_julia_expanded_direct_product",
     oracle=(state, result)->result == state.fixture.expected,
     contract="owned exact Int64 vector of all ordered-blade coefficients",
     capabilities=Dict("exact_oracle"=>"independent full mask-pair enumeration, inversion parity and diagonal contractions",

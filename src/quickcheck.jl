@@ -81,6 +81,8 @@ function technique_bench_config(row;benchmark_root=dirname(@__DIR__))
     config["campaign"]["backend"]="benchmarktools"
     config["campaign"]["condition"]="isolated"
     config["campaign"]["interference_label"]=""
+    config["case_defaults"]["baseline_required"]=true
+    config["case_defaults"]["baseline_equality_required"]=!(row["id"] in ("24","25","28","34"))
     config["limits"]["samples"]=get(config["limits"],"samples",11)
     config
 end
@@ -298,7 +300,8 @@ function run_technique_bench(preflight,output;ids=String[])
                     push!(included,adapter)
                 end
                 Base.invokelatest(run_resumable_campaign,
-                    config;output=directory)
+                    config;output=directory,
+                    baseline_cache_root=joinpath(output,"_baselines"))
                 result["status"]="complete"
                 result["archive"]=directory
             catch exception

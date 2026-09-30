@@ -33,6 +33,8 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_generated_product",
     generate=ggen_generate, prepare=ggen_prepare, execute=ggen_execute,
+    baseline_execute=state->gb_execute_vectors_baseline(state.base),
+    baseline_name="garamon_julia_direct_product",
     oracle=(state,result)->size(result)==size(state.base.fixture.expected) &&
         result==state.base.fixture.expected,
     contract="owned Float64 matrix of all structural vector-product coefficients",

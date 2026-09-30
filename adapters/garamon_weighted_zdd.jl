@@ -48,6 +48,28 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_weighted_zdd",
     generate=wz20_generate,prepare=wz20_prepare,execute=wz20_execute,
+    baseline_prepare=state->begin
+        f=state.fixture
+        gram=zeros(eltype(f.g),length(f.g),length(f.g))
+        for i in eachindex(f.g)
+            gram[i,i]=f.g[i]
+        end
+        ga=algebra(gram)
+        (;fixture=f,
+            left=multivector(ga,f.a;storage=:sparse),
+            right=multivector(ga,f.b;storage=:sparse))
+    end,
+    baseline_execute=state->begin
+        product=geometric_product(state.left,state.right)
+        Q=Rational{BigInt}
+        result=Dict{BigInt,Q}()
+        for mask in 0:(1<<length(state.fixture.g))-1
+            value=Q(coefficient_mask(product,mask))
+            iszero(value) || (result[BigInt(mask)]=value)
+        end
+        result
+    end,
+    baseline_name="garamon_julia_sparse_direct_product",
     oracle=(state,result)->result isa Dict{BigInt,Rational{BigInt}} &&
         result==state.fixture.expected,
     contract="owned exact rational complete product extracted from a coefficient ZDD",

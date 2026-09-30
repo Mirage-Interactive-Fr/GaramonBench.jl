@@ -61,6 +61,9 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_blade_index",
     generate=bi_generate,prepare=bi_prepare,execute=bi_execute,
+    baseline_execute=state->bi_execute(merge(state,
+        (fixture=merge(state.fixture,(strategy="mask",)),))),
+    baseline_name="garamon_julia_mask_index",
     oracle=(state,result)->result==state.fixture.expected,
     contract="owned BigInt matrix of grade, lexicographic rank and unranked mask",
     capabilities=Dict("exact_oracle"=>"complementary combinadic rank identity plus roundtrip",

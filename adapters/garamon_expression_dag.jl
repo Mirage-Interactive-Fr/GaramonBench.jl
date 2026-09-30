@@ -85,6 +85,32 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_expression_dag",
     generate=dag16_generate, prepare=dag16_prepare, execute=dag16_execute,
+    baseline_prepare=state->begin
+        f=state.fixture
+        gram=zeros(Int64,f.n,f.n)
+        for i in 1:f.n
+            gram[i,i]=f.diagonal[i]
+        end
+        ga=algebra(gram)
+        make(terms)=multivector(ga,Dict(mask=>Float64(value)
+            for (mask,value) in terms);storage=:sparse)
+        (;fixture=f,a=(make(f.coefficients[1]),make(f.changed)),
+            b=make(f.coefficients[2]),c=make(f.coefficients[3]))
+    end,
+    baseline_execute=state->begin
+        f=state.fixture
+        output=Matrix{Float64}(undef,size(f.expected))
+        rhs=f.structure=="shared" ? state.b : state.c
+        for column in 1:2
+            a=state.a[column]
+            product=geometric_product(a,state.b)+geometric_product(a,rhs)
+            for mask in 0:(1<<f.n)-1
+                output[mask+1,column]=coefficient_mask(product,mask)
+            end
+        end
+        output
+    end,
+    baseline_name="garamon_julia_direct_expression",
     oracle=(state,result)->size(result)==size(state.fixture.expected) &&
         result==state.fixture.expected,
     contract="owned Float64 matrix of all coefficients before and after a leaf mutation",

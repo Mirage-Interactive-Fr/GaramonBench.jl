@@ -84,6 +84,8 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_binary_rank",
     generate=br31_generate, prepare=br31_prepare, execute=br31_execute,
+    baseline_execute=state->br31_execute(merge(state,(plans=nothing,))),
+    baseline_name="garamon_julia_direct_product",
     oracle=(state,result)->size(result)==size(state.fixture.expected) &&
         result==state.fixture.expected,
     contract="owned Float64 matrix of every structural coefficient of fixed-support diagonal product",

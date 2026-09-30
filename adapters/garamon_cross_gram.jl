@@ -118,6 +118,19 @@ function cg_execute(state)
     output
 end
 
+function cg_baseline_prepare(state)
+    pairs=[begin
+        ga,left,right,ls,rs=item
+        a=expand(FactorizedBlade(ga,BigInt.(left);scale=BigInt(ls)))
+        b=expand(FactorizedBlade(ga,BigInt.(right);scale=BigInt(rs)))
+        (reverse(a),b)
+    end for item in state.prepared]
+    (;pairs)
+end
+
+cg_baseline_execute(state)=BigInt[
+    scalarpart(geometric_product(a,b)) for (a,b) in state.pairs]
+
 function cg_check(state,result)
     result==state.fixture.expected &&
         length(result)==state.fixture.horizon &&
@@ -128,6 +141,9 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_cross_gram",
     generate=cg_generate,prepare=cg_prepare,execute=cg_execute,
+    baseline_prepare=cg_baseline_prepare,
+    baseline_execute=cg_baseline_execute,
+    baseline_name="garamon_julia_expanded_reverse_product_scalar",
     oracle=cg_check,
     contract="exact scalar pairing of two equal-grade decomposable blades; prepared cross-Gram rank or recomputation",
     capabilities=Dict(

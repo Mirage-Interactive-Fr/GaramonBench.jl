@@ -90,6 +90,9 @@ end
 
 register_adapter!(BenchmarkAdapter(name="garamon_pfaffian_scalar",
     generate=pf35_generate,prepare=pf35_prepare,execute=pf35_execute,
+    baseline_execute=state->pf35_execute(merge(state,
+        (fixture=merge(state.fixture,(strategy="full",)),))),
+    baseline_name="garamon_julia_full_vector_chain",
     oracle=pf35_oracle,
     contract="owned Float64 vector of scalar projections of an ordered even vector chain",
     capabilities=Dict("exact_oracle"=>"independent Rational{BigInt} Chevalley exterior action",

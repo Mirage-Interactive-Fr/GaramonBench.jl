@@ -89,11 +89,46 @@ function fg_execute(state)
     output
 end
 
+function fg_baseline_prepare(state)
+    f=state.fixture
+    gram=zeros(BigInt,f.n,f.n)
+    transport=zeros(BigInt,f.n,f.n)
+    for i in 1:f.n
+        gram[i,i]=1
+        transport[i,i]=1
+    end
+    for (target,source,coefficient) in f.shears
+        for j in 1:f.n
+            transport[target,j]+=coefficient*transport[source,j]
+        end
+    end
+    ga=algebra(gram)
+    blades=[begin
+        occupied,target=item
+        a=expand(FactorizedBlade(ga,BigInt.(occupied)))
+        b=expand(FactorizedBlade(ga,BigInt.(target)))
+        (a,reverse(b))
+    end for item in f.inputs]
+    (;ga,transport,blades)
+end
+
+function fg_baseline_execute(state)
+    output=BigInt[]
+    for (a,b) in state.blades
+        mapped=outermorphism(state.transport,a,state.ga)
+        push!(output,scalarpart(geometric_product(b,mapped)))
+    end
+    output
+end
+
 fg_check(state,result)=result==state.fixture.expected &&
     length(result)==state.fixture.horizon
 
 register_adapter!(BenchmarkAdapter(name="garamon_fermionic_gaussian",
     generate=fg_generate,prepare=fg_prepare,execute=fg_execute,
+    baseline_prepare=fg_baseline_prepare,
+    baseline_execute=fg_baseline_execute,
+    baseline_name="garamon_julia_expanded_outermorphism_scalar",
     oracle=fg_check,
     contract="exact Slater-state overlap after number-conserving quadratic-generator shears",
     capabilities=Dict(
