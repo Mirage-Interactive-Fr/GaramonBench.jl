@@ -533,12 +533,28 @@ problem, and both require an exact fallback outside that class.
 \techniqueplot{36}{Cross-Gram rank}{Certified rank, pairing construction, selected scalar cost, and fallback.}
 \techniqueplot{37}{Fermionic Gaussian operators}{Class certification, closed operations, conversion, and fallback.}
 
-A factored change of basis, for example by a sequence of small
-plane transformations, could avoid storing a large grade-wise
-matrix. The induced action on blades, support expansion, and
-rounding must be included. It competes with direct general-metric
-multiplication and with a materialized transform only for the same
-basis and output contract.
+A sequence of Givens rotations~\cite{givens1958} represents an orthogonal change of basis
+through plane updates instead of a dense exterior-power matrix. For a
+rotation of coordinates $i<j$, choose exact rational $c,s$ with
+$c^2+s^2=1$ and map $e_i\mapsto ce_i+se_j$ and
+$e_j\mapsto-se_i+ce_j$. A blade containing neither or both indices
+is unchanged; a blade containing exactly one contributes to its old mask
+and to the mask with $i,j$ exchanged. The exchanged coefficient acquires
+the exterior-reordering sign determined by the occupied indices strictly
+between $i$ and $j$. Sparse masked updates therefore apply the full
+outermorphism without constructing a grade-wise matrix. This is an exact
+Clifford-algebra automorphism for the Euclidean identity metric; the
+current implementation rejects other metrics and inexact coefficients.
+It caps live support and raises an error when the cap is exceeded, so no
+contribution is silently removed. The alternate arm materializes the
+ordinary $n\times n$ matrix and applies its exterior extension to the
+same multivectors. The experiment varies dimension, rotation count,
+angle, input support, grade, and episode horizon. It records preparation
+and execution separately, because storing a factored transform can be
+attractive across repeated calls even when a single matrix application
+is faster. A matrix oracle checks every resulting coefficient exactly;
+the two benchmark arms use the same seed and inputs. The placeholder
+below will be replaced only after a qualified isolated run.
 
 \techniqueplot{38}{Factored Givens basis change}{Transformation count, support expansion, conditioning, and total episode.}
 
@@ -741,6 +757,10 @@ and only then evaluate a workload selector and its
 hyperparameters.
 
 \begin{thebibliography}{99}
+\bibitem{givens1958} W. Givens, \emph{Computation of Plane Unitary
+Rotations Transforming a General Matrix to Triangular Form},
+Journal of the Society for Industrial and Applied Mathematics,
+6(1), 26--50, 1958. DOI: 10.1137/0106004.
 \bibitem{breuils2019} S. Breuils, V. Nozick and L. Fuchs,
 \emph{Garamon: A Geometric Algebra Library Generator},
 Advances in Applied Clifford Algebras 29, 69 (2019).

@@ -459,10 +459,14 @@ campaign = ""
 [[technique]]
 id = "38"
 name = "givens-basis-change"
-state = "research"
-source = ""
-test = ""
+state = "prototype"
+source = "src/givens.jl"
+test = "test/givens.jl"
 campaign = ""
+preflight_config = "config/givens_basis_change_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_givens.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 4, mode = "factored", rotation_count = 2, support = 4, grade = 2, angle = "3-4-5", horizon = 1}
 
 [[technique]]
 id = "39"

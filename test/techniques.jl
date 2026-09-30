@@ -7,10 +7,10 @@
     inventory=technique_inventory()
     @test inventory["technique_count"]==46
     @test inventory["pair_count"]==1035
-    @test inventory["research_count"]==13
-    @test inventory["source_present_count"]==33
-    @test inventory["test_file_present_count"]==28
-    @test inventory["preflight_registered_count"]==33
+    @test inventory["research_count"]==12
+    @test inventory["source_present_count"]==34
+    @test inventory["test_file_present_count"]==29
+    @test inventory["preflight_registered_count"]==34
     @test all(row["preflight_registered"] && row["preflight_environment"]=="."
         for row in inventory["techniques"] if row["id"] in
             ("01","02","03","04","05","06","07","08","09","10","11","14","16","18","27","30"))
@@ -30,17 +30,17 @@
     @test matrix[("25","01")]=="C12"
     smoke=technique_smoke_plan()
     @test length(smoke)==48
-    @test count(row->row["status"]=="runnable",smoke)==35
+    @test count(row->row["status"]=="runnable",smoke)==36
     @test count(row->row["status"]=="adapter_missing",smoke)==0
-    @test count(row->row["status"]=="research_not_implemented",smoke)==13
+    @test count(row->row["status"]=="research_not_implemented",smoke)==12
     runnable=filter(row->row["status"]=="runnable",smoke)
-    @test length(unique(row["case_id"] for row in runnable))==35
+    @test length(unique(row["case_id"] for row in runnable))==36
     @test Set(row["id"] for row in runnable if row["kind"]=="combination")==Set(["K1","K3"])
     @test only(filter(row->row["id"]=="27",runnable))["threads"]==4
     @test only(filter(row->row["id"]=="29",runnable))["environment"]=="gpu"
     bench=technique_bench_plan()
     @test length(bench)==48
-    @test count(row->row["status"]=="runnable",bench)==35
+    @test count(row->row["status"]=="runnable",bench)==36
     @test all(row["benchmark_cases"]>=1 && row["benchmark_backend"]=="BenchmarkTools"
         for row in bench if row["status"]=="runnable")
     grade=only(filter(row->row["id"]=="05",bench))
@@ -52,6 +52,7 @@
     @test only(filter(row->row["id"]=="12",bench))["benchmark_cases"]==1512
     @test only(filter(row->row["id"]=="13",bench))["benchmark_cases"]==504
     @test only(filter(row->row["id"]=="44",bench))["benchmark_cases"]==4590
+    @test only(filter(row->row["id"]=="38",bench))["benchmark_cases"]==2880
     modular=only(filter(row->row["id"]=="44",bench))
     modular_cases=expand_cases(GaramonBench.technique_bench_config(modular))
     direct=filter(case->case["mode"]=="direct_bigint",modular_cases)
@@ -71,7 +72,7 @@
         @test only(catalog.scenarios).id==row["case_id"]
         push!(profile_cases,plan["case_id"])
     end
-    @test length(unique(profile_cases))==35
+    @test length(unique(profile_cases))==36
     requests=Dict(row["id"]=>technique_profile_request(row) for row in runnable)
     @test requests["02"]["limits"]["profile_episode_repetitions"]==4096
     @test requests["03"]["limits"]["profile_repetitions"]==100
@@ -79,6 +80,8 @@
     @test requests["10"]["limits"]["profile_episode_repetitions"]==1024
     @test requests["44"]["limits"]["profile_episode_repetitions"]==4096
     @test requests["44"]["limits"]["profile_repetitions"]==100
+    @test requests["38"]["limits"]["profile_episode_repetitions"]==512
+    @test requests["38"]["limits"]["rss_bytes"]==5<<30
     @test requests["17"]["limits"]["profile_episode_repetitions"]==512
     @test requests["17"]["limits"]["rss_bytes"]==4<<30
     @test requests["24"]["limits"]["profile_episode_repetitions"]==512
