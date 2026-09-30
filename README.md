@@ -52,6 +52,12 @@ privileges are required. To use another writable location, pass
 `output=joinpath(homedir(), "garamonbench", "run-001")` and reuse that exact
 path when resuming.
 
+If an explicitly requested new output directory is denied by filesystem
+permissions, the code warns and selects a deterministic directory under
+`data/garamonbench/output-fallback/`. Repeating the original call resolves to
+the same fallback. Existing nonempty directories are never redirected: write
+access must be restored before their archived campaign can resume.
+
 The controller selects native environments and thread counts automatically.
 The current registry uses one thread for ordinary routes, four threads for
 route 27, and the CUDA environment for route 29. The controller's `-t auto`

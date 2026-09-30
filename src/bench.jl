@@ -7,6 +7,43 @@ function _external_article_dirs(archive::AbstractString,condition::AbstractStrin
         condition,first(signature,12),archive_id)
     figure_dir,paper_dir,signature
 end
+function _prepare_bench_output(output::AbstractString; fallback_root=joinpath(
+        dirname(@__DIR__),"data","garamonbench","output-fallback"))
+    destination=abspath(expanduser(output))
+    function writable(path)
+        mkpath(path)
+        mktemp(path) do _,io
+            write(io,"output admission")
+        end
+        path
+    end
+    try
+        return writable(destination)
+    catch exception
+        permission_denied=(exception isa Base.IOError &&
+            exception.code in (Base.UV_EACCES,Base.UV_EROFS)) ||
+            (exception isa SystemError && exception.errnum in (Base.Libc.EACCES,Base.Libc.EROFS))
+        permission_denied || rethrow()
+        # Existing archives must never be silently replaced by a fresh run.
+        populated=try
+            isdir(destination) && !isempty(readdir(destination))
+        catch
+            true
+        end
+        populated && throw(ArgumentError("Benchmark output is not writable: "*destination*
+            ". Restore write access to this existing directory to resume its campaign."))
+        digest=first(bytes2hex(sha256(destination)),12)
+        fallback=joinpath(abspath(expanduser(fallback_root)),basename(destination)*"-"*digest)
+        try
+            writable(fallback)
+        catch
+            throw(ArgumentError("Neither benchmark output nor fallback is writable. "*
+                "Pass output=joinpath(homedir(), \"garamonbench\", \"run-001\")."))
+        end
+        @warn "Requested output is not writable; using a deterministic DrWatson data directory. Repeat the same call to resume." requested=destination output=fallback
+        return fallback
+    end
+end
 
 function _sync_qualified_external_figure(figure::AbstractString,
     condition::AbstractString,completed::Integer,expected::Integer)
@@ -193,6 +230,7 @@ function bench(; output::Union{Nothing,AbstractString}=nothing,
         throw(ArgumentError("cleanup must be :keep, :temporary, or :paper"))
     destination = isnothing(output) ? DrWatson.datadir("garamonbench", "external-ga-vectors",
         isolated ? "isolated" : "exploratory") : abspath(expanduser(output))
+    destination=_prepare_bench_output(destination)
     compact_marker=joinpath(destination,"cleanup.toml")
     if isfile(compact_marker)
         cleanup==:paper && cleanup_bench_data(destination;mode=:paper)
@@ -350,8 +388,7 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
     article_every_cases>=0 || throw(ArgumentError("article_every_cases must be nonnegative"))
     VERSION>=v"1.13" || error("Julia 1.13 or later is required")
     groups=technique_launch_plan(;ids,gpu)
-    destination=abspath(expanduser(output))
-    mkpath(destination)
+    destination=_prepare_bench_output(output)
     _resume_lock(destination) do
         julia=joinpath(Sys.BINDIR,Base.julia_exename())
         # Instantiate every selected environment before measurements, so a

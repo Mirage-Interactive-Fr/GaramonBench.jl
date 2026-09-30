@@ -1,5 +1,37 @@
 using Test, TOML, GaramonBench
 
+@testset "output permissions and stable fallback preserve resume" begin
+    mktempdir() do root
+        writable=joinpath(root,"normal")
+        @test GaramonBench._prepare_bench_output(writable)==writable
+        @test isempty(readdir(writable))
+        if !Sys.iswindows() && ccall(:geteuid,Cuint,())!=0
+            locked=joinpath(root,"locked");mkpath(locked);chmod(locked,0o555)
+            fallback=joinpath(root,"fallback")
+            try
+                requested=joinpath(locked,"run-001")
+                first=GaramonBench._prepare_bench_output(requested;fallback_root=fallback)
+                @test startswith(first,fallback*"/")
+                @test isempty(readdir(first))
+                write(joinpath(first,"campaign.toml"),"completed = true\n")
+                @test GaramonBench._prepare_bench_output(requested;fallback_root=fallback)==first
+                @test read(joinpath(first,"campaign.toml"),String)=="completed = true\n"
+                @test GaramonBench._prepare_bench_output(joinpath(locked,"run-002");fallback_root=fallback)!=first
+            finally
+                chmod(locked,0o755)
+            end
+            write(joinpath(locked,"campaign.toml"),"completed = true\n")
+            chmod(locked,0o555)
+            try
+                @test_throws ArgumentError GaramonBench._prepare_bench_output(locked;fallback_root=fallback)
+                @test read(joinpath(locked,"campaign.toml"),String)=="completed = true\n"
+            finally
+                chmod(locked,0o755)
+            end
+        end
+    end
+end
+
 @testset "bench cleanup retains paper artifacts and defaults to keep" begin
     mktempdir() do destination
         preflight=joinpath(destination,"preflight")
