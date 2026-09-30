@@ -162,6 +162,18 @@ benchmark call is repeated. An incomplete PerfChecker capture requires a new
 profile output directory. Use `ids=["12", "13"]` on any of these functions to
 select routes. Run CPU routes from the package environment with their
 registered thread count; GPU routes require the package's `gpu/` environment.
+When running from `gpu/`, keep the same archive in the main project's
+DrWatson data directory:
+
+~~~julia
+root = DrWatson.datadir(joinpath(pkgdir(GaramonBench), "data",
+    "garamonbench", "techniques-dedicated-001"))
+preflight = joinpath(root, "preflight")
+run_technique_smoke(preflight; ids=["29"])
+run_technique_profiles(preflight, joinpath(root, "profiles"); ids=["29"])
+run_technique_bench(preflight, joinpath(root, "benchmark"); ids=["29"])
+~~~
+
 Routes that declare the same exact generated inputs share one measured
 Garamon.jl baseline. Its samples are stored under `benchmark/_baselines/` and
 referenced by later route cases, so the baseline is not measured again. Resume

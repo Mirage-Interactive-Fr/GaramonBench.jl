@@ -123,6 +123,8 @@
     @test requests["30"]["limits"]["rss_bytes"]==6<<30
     @test requests["K3"]["limits"]["rss_bytes"]==4<<30
     @test !("profile" in requests["15"]["profiling"]["collectors"])
+    @test requests["15"]["limits"]["job_seconds"]==300
+    @test requests["15"]["limits"]["total_seconds"]==1500
     @test !("profile" in requests["09"]["profiling"]["collectors"])
     @test "wall_profile" in requests["09"]["profiling"]["collectors"]
     mktempdir() do root

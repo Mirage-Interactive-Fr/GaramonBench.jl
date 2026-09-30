@@ -118,18 +118,25 @@ function pc15_execute(state)
     println(state.process, "RUN")
     flush(state.process)
     output = parse.(Float64, split(readline(state.process), ','))
-    lifecycle_cache_info(state.environment.depot).digest ==
-        state.cache_after_load.digest ||
-        error("execution modified the disk precompilation cache")
     output
 end
 
-pc15_cleanup(state) = close(state.process)
+function pc15_cleanup(state)
+    try
+        lifecycle_cache_info(state.environment.depot).digest ==
+            state.cache_after_load.digest ||
+            error("execution modified the disk precompilation cache")
+    finally
+        close(state.process)
+    end
+end
 
 function pc15_oracle(state, result)
     state.code_precompiled && state.package_loaded && state.method_ready &&
         state.cache_before_load.digest == state.cache_after_load.digest &&
-        result == state.expected
+        result == state.expected &&
+        lifecycle_cache_info(state.environment.depot).digest ==
+            state.cache_after_load.digest
 end
 
 function pc15_baseline_prepare(state)

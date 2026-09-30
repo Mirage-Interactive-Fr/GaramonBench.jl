@@ -161,8 +161,11 @@ function technique_profile_request(row;benchmark_root=dirname(@__DIR__))
         "limits"=>Dict{String,Any}("threads"=>row["threads"],"samples"=>3,
             "profile_repetitions"=>profile_repetitions,
             "profile_episode_repetitions"=>episode_repetitions,
-            "allocation_repetitions"=>1,"job_seconds"=>120,
-            "total_seconds"=>catalogue ? 900 : 600,"rss_bytes"=>profile_rss_bytes,
+            # GC/memory diagnostics prepare five fresh states after their
+            # initial oracle check. The catalogue builds native caches in
+            # each isolated state, outside the timed operation.
+            "allocation_repetitions"=>1,"job_seconds"=>catalogue ? 300 : 120,
+            "total_seconds"=>catalogue ? 1500 : 600,"rss_bytes"=>profile_rss_bytes,
             "scratch_bytes"=>256<<20,"archive_bytes"=>256<<20))
 end
 

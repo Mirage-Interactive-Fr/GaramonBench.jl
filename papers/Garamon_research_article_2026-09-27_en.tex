@@ -669,6 +669,9 @@ reload, and repeated execution. No catalogue is presumed optimal
 for users who cannot predict their future algebra.
 The catalogue build uses the campaign's pinned dependency closure,
 including when the diagnostic worker itself has a smaller environment.
+Disk-cache integrity is checked during verification and cleanup, outside
+the timed product call. Fresh-state diagnostics include repeated native
+catalogue construction in their setup budget.
 
 \techniqueplot{14}{Just-in-time product generation}{Generation, compilation, code size, first use, and warm use.}
 \techniqueplot{15}{Precompilation catalogue}{Build, disk size, fresh-process reload, first use, and total episode.}

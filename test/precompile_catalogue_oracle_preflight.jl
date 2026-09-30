@@ -9,6 +9,16 @@ include(joinpath(@__DIR__, "..", "adapters", "garamon_precompile_catalogue.jl"))
     @test only(cases)["dimension"] == 3
     @test only(cases)["scenario"] == "known"
     @test only(cases)["strategy"] == "generated"
+    mktempdir() do depot
+        cache=lifecycle_cache_info(depot)
+        state=(code_precompiled=true,package_loaded=true,method_ready=true,
+            cache_before_load=cache,cache_after_load=cache,
+            environment=(;depot),expected=[1.0])
+        @test pc15_oracle(state,[1.0])
+        mkpath(joinpath(depot,"compiled"))
+        write(joinpath(depot,"compiled","probe.ji"),"changed cache")
+        @test !pc15_oracle(state,[1.0])
+    end
     mktempdir() do temporary
         @test_throws ErrorException lifecycle_environment(joinpath(temporary,"incomplete"),true;
             dependency_manifest=joinpath(@__DIR__,"..","worker","Manifest.toml"))
