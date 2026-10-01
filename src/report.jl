@@ -39,7 +39,7 @@ function _technique_report_rows(row,config,archive)
         id=case_id(case)
         directory=joinpath(archive,"cases",id)
         isfile(joinpath(directory,"completion.toml")) || continue
-        _resume_verify_case(directory,case,manifest["run_signature"],samples;
+        marker=_resume_verify_case(directory,case,manifest["run_signature"],samples;
             backend="benchmarktools")
         get(case,"baseline_required",false)===true || error("article case has no standard baseline")
         verdict=TOML.parsefile(joinpath(directory,"verdict.toml"))
@@ -56,7 +56,9 @@ function _technique_report_rows(row,config,archive)
         value=median(warm)
         reference=median(baseline)
         ratio=reference>0 ? value/reference : NaN
-        push!(rows,(technique=row["id"],case_id=id,dimension=get(case,"dimension",0),
+        push!(rows,(technique=row["id"],case_id=id,
+            execution_signature=get(marker,"execution_signature",manifest["run_signature"]),
+            dimension=get(case,"dimension",0),
             family=string(get(case,"family",get(case,"signature","scenario"))),
             seed=case["seed"],samples=samples,median_ns=value,
             q25_ns=quantile(warm,0.25),q75_ns=quantile(warm,0.75),
@@ -141,6 +143,8 @@ function _refresh_technique_benchmark_article(row,config,archive;
     _resume_write(joinpath(directory,"provenance.toml"),Dict(
         "schema_version"=>1,"qualification"=>"isolated_completed_cases_oracle_and_baseline_passed",
         "technique"=>row["id"],"run_signature"=>signature,
+        "mixed_source_revisions"=>get(manifest,"mixed_source_revisions",false),
+        "execution_signatures"=>sort!(unique(r.execution_signature for r in rows)),
         "campaign_status"=>manifest["status"],"completed_cases"=>length(rows),
         "total_cases"=>length(expand_cases(config)),"summary_sha256"=>_resume_sha(summary),
         "parameters_sha256"=>_resume_sha(joinpath(directory,"case_parameters.toml")),

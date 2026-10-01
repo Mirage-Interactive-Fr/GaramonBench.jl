@@ -285,7 +285,7 @@ does not invoke PerfChecker and never reuses another machine's timing data.
 function run_technique_bench(preflight,output;ids=String[],
                              show_progress::Bool=true,
                              update_article::Bool=true,
-                             article_every_cases::Int=0)
+                             article_every_cases::Int=0,allow_source_changes::Bool=false)
     article_every_cases>=0 || throw(ArgumentError("article_every_cases must be nonnegative"))
     root=dirname(@__DIR__)
     rows=technique_bench_plan(;benchmark_root=root)
@@ -330,7 +330,7 @@ function run_technique_bench(preflight,output;ids=String[],
                                       enabled=show_progress)
                 try
                     Base.invokelatest(run_resumable_campaign,
-                        config;output=directory,
+                        config;output=directory,allow_source_changes,
                         baseline_cache_root=joinpath(output,"_baselines"),
                         on_progress=(archive,completed,total)->begin
                             _campaign_meter_update!(meter,archive,completed,total)
@@ -344,8 +344,8 @@ function run_technique_bench(preflight,output;ids=String[],
                             end
                         end)
                     _campaign_meter_close!(meter;complete=true)
-                catch
-                    _campaign_meter_close!(meter;complete=false)
+                catch exception
+                    _campaign_meter_close!(meter;complete=false,failure=exception)
                     rethrow()
                 end
                 result["status"]="complete"
@@ -354,6 +354,7 @@ function run_technique_bench(preflight,output;ids=String[],
                 exception isa InterruptException && rethrow()
                 result["status"]="failed"
                 result["reason"]=failure_message(exception)
+                println(stderr,"Technique ",row["id"]," failed: ",result["reason"])
             end
         end
         if result["status"]=="complete" && update_article
@@ -385,7 +386,7 @@ end
 """Execute the short screen with the same resumable DrWatson-backed archive
 used by the full grid. Completed cases are verified and skipped on replay.
 """
-function run_technique_smoke(output;ids=String[])
+function run_technique_smoke(output;ids=String[],allow_source_changes::Bool=false)
     root=dirname(@__DIR__)
     rows=technique_smoke_plan(;benchmark_root=root)
     requested=Set(ids)
@@ -424,7 +425,13 @@ function run_technique_smoke(output;ids=String[])
                     include_technique_adapter(adapter,config)
                     push!(included,adapter)
                 end
-                Base.invokelatest(run_resumable_campaign,config;output=directory)
+                # After a code update, run the bounded oracle again before
+                # accepting the old preflight archive for the new revision.
+                if allow_source_changes && isfile(joinpath(directory,"campaign.toml"))
+                    Base.invokelatest(run_case_preflight,ADAPTERS[config["case_defaults"]["adapter"]],
+                        only(expand_cases(config)),config["limits"])
+                end
+                Base.invokelatest(run_resumable_campaign,config;output=directory,allow_source_changes)
                 audit=audit_resumable_archive(config,directory)
                 audit["archive_integrity"]=="validated" &&
                     audit["completed_ids"]==[row["case_id"]] ||

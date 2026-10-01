@@ -25,7 +25,7 @@
         @test length(first["completed_ids"])==1
         @test length(first["pending_ids"])==1
         @test calls==[4,16]
-        @test TOML.parsefile(joinpath(output,"progress.toml"))["status"]=="interrupted"
+        @test TOML.parsefile(joinpath(output,"progress.toml"))["status"]=="failed"
 
         fail_second[]=false
         @test run_resumable_campaign(config;output)==output

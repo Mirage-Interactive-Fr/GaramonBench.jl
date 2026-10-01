@@ -62,7 +62,10 @@ The controller selects native environments and thread counts automatically.
 The current registry uses one thread for ordinary routes, four threads for
 route 27, and the CUDA environment for route 29. The controller's `-t auto`
 does not change these declared measurement protocols. Groups run sequentially
-to avoid competing benchmark workloads. BLAS and OpenMP subprocesses use one
+to avoid competing benchmark workloads. Each technique gets a fresh native
+process, so earlier grids cannot leave JIT code or allocator state in later
+techniques. Admission uses current resident memory on Linux; reported peak
+RSS remains the historical process peak. BLAS and OpenMP subprocesses use one
 thread. Each archive records the actual Julia threads, worker identity, machine
 and environment. The process route creates and removes its own Julia worker.
 
@@ -91,6 +94,26 @@ own detailed checkpoint. Keep the same sources, settings and machine when
 resuming. By default all raw data are retained. Qualified figures and the
 article update after each completed route; `article_every_cases=100` enables
 intermediate updates during longer routes.
+
+An ordinary failure prints its actual cause beside the technique ID and in
+the final stage summary. Only Ctrl-C is labelled interrupted. Detailed reasons
+are retained in `benchmark/bench-progress.toml` and each route's `progress.toml`.
+After updating source code, explicitly allow resuming the existing archive:
+
+```julia
+bench(campaign=:techniques, isolated=true, allow_source_changes=true)
+```
+
+Use the same `output` if you previously supplied one. The default remains
+strict. The override accepts source and dependency environment changes;
+it never bypasses scenario, seed, machine or completed-artifact checks.
+Validated cases are skipped, original snapshots remain intact, and new source
+and environment snapshots are added under `revisions/<signature>/`. New case
+completion records and technique summary CSVs identify their execution
+revision; article provenance marks campaigns with mixed revisions. The minimal
+oracle is rerun on the new code before a changed technique preflight is accepted.
+Shared baselines for new cases use the new revision's identity. Existing
+case/baseline pairs retain their original measurements.
 
 ## Run and resume the EGA3 comparison
 
@@ -166,8 +189,9 @@ its oracle and the article artifacts are verified.
 
 Resume an interrupted run by repeating the same call with the same output
 path, project, sources, configuration, and machine. Completed cases are
-rechecked and skipped; incomplete cases are rerun. A new machine or source
-revision needs a new results directory. The campaign uses a recorded common
+rechecked and skipped; incomplete cases are rerun. A new machine needs a new
+results directory. Source changes can be accepted with
+`allow_source_changes=true`, including for the external comparison. The campaign uses a recorded common
 seed. Preparation and compilation are separated from product timing.
 
 The default DrWatson layout is:

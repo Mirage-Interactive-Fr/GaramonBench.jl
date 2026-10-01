@@ -28,6 +28,40 @@ end
 
 _resume_sha(path)=bytes2hex(open(sha256,path))
 
+function _resume_execution(manifest)
+    haskey(manifest,"active_execution") || return manifest
+    active=manifest["active_execution"]
+    any(r->r==active,get(manifest,"source_revisions",Any[])) ||
+        error("active source revision is not in the recorded history")
+    active
+end
+
+function _resume_record_execution!(manifest,output,config,sources,machine,environment,limits)
+    signature=_resume_signature(config,sources,machine,environment)
+    revisions=get!(manifest,"source_revisions",Any[])
+    if !any(r->r["run_signature"]==signature,revisions)
+        directory=joinpath(output,"revisions",signature)
+        # An interrupted snapshot has no published revision and may be rebuilt.
+        isdir(directory) && rm(directory;recursive=true)
+        mkpath(directory)
+        archived=_resume_sources(config;output=directory,
+            limit=get(limits,"source_snapshot_bytes",64<<20))
+        _resume_signature(config,archived,machine,environment)==signature ||
+            error("sources changed while recording a resume override")
+        for (name,path) in _resume_environment_files()
+            archive_file!(path,joinpath(directory,"environment",name))
+        end
+        _resume_environment()==environment || error("environment changed while recording a resume override")
+        push!(revisions,Dict("run_signature"=>signature,"repositories"=>archived,
+            "environment"=>environment,"accepted_utc"=>string(now(UTC)),
+            "previous_signature"=>_resume_execution(manifest)["run_signature"]))
+    end
+    manifest["active_execution"]=only(filter(r->r["run_signature"]==signature,revisions))
+    manifest["mixed_source_revisions"]=true
+    _resume_write(joinpath(output,"campaign.toml"),manifest)
+    @warn "Resuming with changed sources or dependencies; validated cases retain their original revision" output signature
+end
+
 const RESUME_CORE_FILES=Set(["case.toml","samples.csv","verdict.toml","completion.toml"])
 const RESUME_ARTIFACT_EXTENSIONS=Set([".toml",".csv",".json",".txt",".folded"])
 
@@ -109,6 +143,11 @@ function _resume_verify_case(directory,case,signature,samples_expected;
     id=case_id(case)
     marker["status"]=="validated" && marker["case_id"]==id &&
         marker["run_signature"]==signature || error("completion identity differs: "*id)
+    if haskey(marker,"execution_signature")
+        manifest=TOML.parsefile(joinpath(dirname(dirname(directory)),"campaign.toml"))
+        accepted=[manifest["run_signature"]; [r["run_signature"] for r in get(manifest,"source_revisions",Any[])]]
+        marker["execution_signature"] in accepted || error("unknown case source revision: "*id)
+    end
     required=backend=="oracle_preflight" ?
         (("case.toml","case_sha256"),("verdict.toml","verdict_sha256")) :
         (("case.toml","case_sha256"),("samples.csv","samples_sha256"),
@@ -168,7 +207,7 @@ function _resume_verify_case(directory,case,signature,samples_expected;
     marker
 end
 
-function _resume_prepare(output,config,cases,limits)
+function _resume_prepare(output,config,cases,limits;allow_source_changes::Bool=false)
     manifest_path=joinpath(output,"campaign.toml")
     first_run=!isfile(manifest_path)
     setup_marker=joinpath(output,".garamonbench-setup.toml")
@@ -229,10 +268,15 @@ function _resume_prepare(output,config,cases,limits)
     else
         manifest=TOML.parsefile(manifest_path)
         manifest["schema_version"]==1 &&
-            manifest["run_signature"]==signature &&
+            TOML.parsefile(joinpath(output,"configuration.toml"))==_resume_config(config) &&
+            manifest["machine"]["sha256"]==machine["sha256"] &&
             manifest["case_ids"]==case_id.(cases) &&
             manifest["condition"]==config["campaign"]["condition"] ||
-            error("resume refused: configuration, sources, machine or environment changed")
+            error("resume refused: configuration or machine changed")
+        if _resume_execution(manifest)["run_signature"]!=signature
+            allow_source_changes || error("resume refused: sources or environment changed; use allow_source_changes=true to retain validated cases explicitly")
+            _resume_record_execution!(manifest,output,config,sources,machine,environment,limits)
+        end
         isdir(joinpath(output,"cases")) && isdir(joinpath(output,"staging")) ||
             error("resume directories missing")
         isfile(setup_marker) && rm(setup_marker)
@@ -284,39 +328,46 @@ function audit_resumable_archive(config,output)
     stable=Dict(k=>v for (k,v) in machine if k!="sha256")
     bytes2hex(sha256(canonical_toml(stable)))==machine["sha256"] ||
         error("archived machine fingerprint changed")
-    environment=manifest["environment"]
-    for (name,digest) in environment
-        path=joinpath(output,"environment",name)
-        isfile(path) && _resume_sha(path)==digest ||
-            error("archived environment changed: "*name)
-    end
-    sources=manifest["repositories"]
-    for (label,identity) in sources
-        root=joinpath(output,"sources",label)
-        isdir(root) || error("source snapshot missing: "*label)
-        entries=identity["files"]
-        expected=sort!(String[entry["path"] for entry in entries])
-        actual=String[]
-        for (directory,subdirs,files) in walkdir(root)
-            any(name->islink(joinpath(directory,name)),subdirs) &&
-                error("source snapshot symlink directory: "*label)
-            for name in files
-                path=joinpath(directory,name)
-                islink(path) && error("source snapshot symlink file: "*label)
-                push!(actual,relpath(path,root))
+    for revision in [manifest; get(manifest,"source_revisions",Any[])]
+        snapshot=revision===manifest ? output : joinpath(output,"revisions",revision["run_signature"])
+        environment=revision["environment"]
+        for (name,digest) in environment
+            path=joinpath(snapshot,"environment",name)
+            isfile(path) && _resume_sha(path)==digest ||
+                error("archived environment changed: "*name)
+        end
+        sources=revision["repositories"]
+        for (label,identity) in sources
+            root=joinpath(snapshot,"sources",label)
+            isdir(root) || error("source snapshot missing: "*label)
+            entries=identity["files"]
+            expected=sort!(String[entry["path"] for entry in entries])
+            actual=String[]
+            for (directory,subdirs,files) in walkdir(root)
+                any(name->islink(joinpath(directory,name)),subdirs) &&
+                    error("source snapshot symlink directory: "*label)
+                for name in files
+                    path=joinpath(directory,name)
+                    islink(path) && error("source snapshot symlink file: "*label)
+                    push!(actual,relpath(path,root))
+                end
             end
+            sort!(actual)==expected || error("source snapshot inventory changed: "*label)
+            for entry in entries
+                path=joinpath(root,entry["path"])
+                filesize(path)==entry["bytes"] && _resume_sha(path)==entry["sha256"] ||
+                    error("source snapshot content changed: "*label*"/"*entry["path"])
+            end
+            bytes2hex(sha256(canonical_toml(Dict("files"=>entries))))==identity["sha256"] ||
+                error("source inventory fingerprint changed: "*label)
         end
-        sort!(actual)==expected || error("source snapshot inventory changed: "*label)
-        for entry in entries
-            path=joinpath(root,entry["path"])
-            filesize(path)==entry["bytes"] && _resume_sha(path)==entry["sha256"] ||
-                error("source snapshot content changed: "*label*"/"*entry["path"])
-        end
-        bytes2hex(sha256(canonical_toml(Dict("files"=>entries))))==identity["sha256"] ||
-            error("source inventory fingerprint changed: "*label)
+        signature=_resume_signature(config,sources,machine,environment)
+        signature==revision["run_signature"] || error("archived run signature changed")
     end
-    signature=_resume_signature(config,sources,machine,environment)
-    signature==manifest["run_signature"] || error("archived run signature changed")
+    signature=manifest["run_signature"]
+    execution=_resume_execution(manifest)
+    sources=execution["repositories"]
+    environment=execution["environment"]
     samples=get(get(config,"limits",Dict()),"samples",11)
     completed=String[]
     for case in cases
@@ -351,6 +402,8 @@ function audit_resumable_archive(config,output)
         "current_machine_matches"=>current_machine_match,
         "current_environment_matches"=>current_environment_match,
         "current_sources_match"=>current_sources,
+        "mixed_source_revisions"=>get(manifest,"mixed_source_revisions",false),
+        "source_revision_signatures"=>[signature; [r["run_signature"] for r in get(manifest,"source_revisions",Any[])]],
         "same_machine_resume_allowed"=>current_machine_match &&
             current_environment_match && all(values(current_sources)),
         "cross_machine_measurements_reused"=>false)
@@ -385,15 +438,18 @@ function _campaign_meter_update!(display::_CampaignMeter,archive,completed,total
     nothing
 end
 
-function _campaign_meter_close!(display::_CampaignMeter;complete::Bool)
+function _campaign_meter_close!(display::_CampaignMeter;complete::Bool,failure=nothing)
     isnothing(display.meter) && return nothing
     complete ? ProgressMeter.finish!(display.meter) :
         ProgressMeter.cancel(display.meter,
-            display.label*": interrupted; validated cases remain resumable")
+            display.label*(isnothing(failure) || failure isa InterruptException ?
+                ": interrupted; validated cases remain resumable" :
+                ": failed: "*failure_message(failure)*"; validated cases retained"))
     nothing
 end
 
-function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache_root=nothing)
+function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache_root=nothing,
+                                allow_source_changes::Bool=false)
     cases=expand_cases(config)
     backend=get(config["campaign"],"backend","")
     backend in ("perfchecker","benchmarktools","oracle_preflight") ||
@@ -409,13 +465,14 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
     mkpath(output)
     _resume_lock(output) do
         limits=get(config,"limits",Dict())
-        manifest=_resume_prepare(output,config,cases,limits)
+        manifest=_resume_prepare(output,config,cases,limits;allow_source_changes)
+        execution=_resume_execution(manifest)
         signature=manifest["run_signature"]
         baseline_cache=isnothing(baseline_cache_root) ? nothing :
             (root=abspath(baseline_cache_root),context=Dict{String,Any}(
-                "sources"=>Dict(k=>v["sha256"] for (k,v) in manifest["repositories"]),
+                "sources"=>Dict(k=>v["sha256"] for (k,v) in execution["repositories"]),
                 "machine"=>manifest["machine"]["sha256"],
-                "environment"=>manifest["environment"],
+                "environment"=>execution["environment"],
                 "condition"=>manifest["condition"],
                 "threads"=>Threads.nthreads()))
         samples=get(limits,"samples",11)
@@ -449,10 +506,11 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
                 _resume_write(joinpath(stage,"verdict.toml"),verdict)
                 current=_resume_sources(config;
                     limit=get(limits,"source_snapshot_bytes",64<<20))
-                all(k->current[k]["sha256"]==manifest["repositories"][k]["sha256"],
+                all(k->current[k]["sha256"]==execution["repositories"][k]["sha256"],
                     keys(current)) || error("sources changed during case "*id)
                 marker=Dict{String,Any}("status"=>"validated","case_id"=>id,
                     "run_signature"=>signature,
+                    "execution_signature"=>execution["run_signature"],
                     "case_sha256"=>_resume_sha(joinpath(stage,"case.toml")),
                     "verdict_sha256"=>_resume_sha(joinpath(stage,"verdict.toml")),
                     "record_count"=>length(rows),
@@ -476,7 +534,7 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
             _resume_write(joinpath(output,"campaign.toml"),manifest)
         catch exception
             _resume_write(joinpath(output,"progress.toml"),
-                Dict("status"=>"interrupted","completed_ids"=>completed,
+                Dict("status"=>exception isa InterruptException ? "interrupted" : "failed","completed_ids"=>completed,
                     "pending_ids"=>setdiff(case_id.(cases),completed),
                     "failure"=>failure_message(exception)))
             rethrow()

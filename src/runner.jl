@@ -16,9 +16,27 @@ function measured_stage!(rows,caseid,phase,directory,f)
     return observed.value
 end
 
+function resident_rss_bytes()
+    Sys.islinux() || return Sys.maxrss()
+    # maxrss is the process lifetime high-water mark, not current memory.
+    parse(Int,split(read("/proc/self/statm",String))[2])*Sys.PAGESIZE
+end
+
+function controller_memory_guard(limits)
+    limit=get(limits,"controller_rss_bytes",2<<30)
+    observed=resident_rss_bytes()
+    if observed>limit
+        GC.gc(true) # Outside the timed kernel: reclaim prior case state.
+        observed=resident_rss_bytes()
+    end
+    observed<=limit || error("controller RSS budget: current resident bytes "*
+        string(observed)*" exceed "*string(limit))
+    nothing
+end
+
 function case_guard(rows,start,limits)
     maximum(r.disk_checkpoint_bytes for r in rows;init=0)<=get(limits,"build_disk_bytes",256<<20) || error("build disk budget")
-    Sys.maxrss()<=get(limits,"controller_rss_bytes",2<<30) || error("controller RSS budget")
+    controller_memory_guard(limits)
     time()-start<=get(limits,"case_seconds",120) || error("case time budget")
 end
 
@@ -150,7 +168,7 @@ function _run_case_unlocked(adapter,case,limits;capture_trial=Ref{Any}(nothing),
             end
             append!(disk_checkpoints,[r.disk_checkpoint_bytes for r in rows])
             maximum(disk_checkpoints;init=0)<=get(limits,"build_disk_bytes",256<<20) || error("build disk budget")
-            Sys.maxrss()<=get(limits,"controller_rss_bytes",2<<30) || error("controller RSS budget")
+            controller_memory_guard(limits)
             time()-start<=get(limits,"case_seconds",120) || error("case time budget")
         finally
             isnothing(baseline_state) || adapter.baseline_cleanup(baseline_state)
@@ -211,8 +229,7 @@ function run_case_preflight(adapter,case,limits)
                 end
                 tree_bytes(temporary)<=get(limits,"build_disk_bytes",256<<20) ||
                     error("preflight build disk budget")
-                Sys.maxrss()<=get(limits,"controller_rss_bytes",2<<30) ||
-                    error("preflight controller RSS budget")
+                controller_memory_guard(limits)
                 time()-started<=get(limits,"case_seconds",120) ||
                     error("preflight case time budget")
             end

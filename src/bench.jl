@@ -213,18 +213,21 @@ end
 Use `bench(; isolated=true)` only when the caller has actually reserved the
 machine for measurement. Repeating a call with the same output verifies and
 skips completed cases.
+`allow_source_changes=true` explicitly accepts code and dependency updates;
+old validated cases keep their original revision and new cases record theirs.
 """
 function bench(; output::Union{Nothing,AbstractString}=nothing,
     isolated::Bool=false,cleanup::Symbol=:keep,
     show_progress::Bool=true,campaign::Symbol=:external,
-    ids=String[],gpu::Symbol=:auto,article_every_cases::Int=0)
+    ids=String[],gpu::Symbol=:auto,article_every_cases::Int=0,
+    allow_source_changes::Bool=false)
     campaign in (:external,:techniques) || throw(ArgumentError("campaign must be :external or :techniques"))
     if campaign==:techniques
         isolated || throw(ArgumentError("the technique benchmark requires isolated=true on the dedicated machine"))
         cleanup==:keep || throw(ArgumentError("technique campaigns currently retain their auditable raw archives"))
         destination=isnothing(output) ? DrWatson.datadir(joinpath(dirname(@__DIR__),
             "data","garamonbench","techniques-dedicated-001")) : abspath(expanduser(output))
-        return run_technique_campaign(destination;ids,gpu,show_progress,article_every_cases)
+        return run_technique_campaign(destination;ids,gpu,show_progress,article_every_cases,allow_source_changes)
     end
     cleanup in (:keep,:temporary,:paper) ||
         throw(ArgumentError("cleanup must be :keep, :temporary, or :paper"))
@@ -257,6 +260,7 @@ function bench(; output::Union{Nothing,AbstractString}=nothing,
     preflight_meter=_campaign_meter("Preflight";enabled=show_progress)
     preflight_output=try
         result=run_resumable_campaign(preflight;
+            allow_source_changes,
             output=joinpath(destination,"preflight"),
             on_progress=(archive,completed,total)->
                 _campaign_meter_update!(preflight_meter,archive,completed,total))
@@ -284,7 +288,7 @@ function bench(; output::Union{Nothing,AbstractString}=nothing,
     end
     benchmark_output=try
         result=run_resumable_campaign(benchmark;
-            output=joinpath(destination,"benchmark"),on_progress)
+            output=joinpath(destination,"benchmark"),on_progress,allow_source_changes)
         _campaign_meter_close!(benchmark_meter;complete=true)
         result
     catch
@@ -308,6 +312,7 @@ function bench(; output::Union{Nothing,AbstractString}=nothing,
             "figure_pdf"=>figure_pdf,"figure_sha256"=>_resume_sha(figure_pdf),
             "article_pdf"=>article_pdf,"article_sha256"=>_resume_sha(article_pdf),
             "article_source_sha256"=>_resume_sha(article_source),
+            "mixed_source_revisions"=>get(TOML.parsefile(joinpath(benchmark_output,"campaign.toml")),"mixed_source_revisions",false),
             "run_signature"=>signature))
     isolated && _publish_qualified_article_data(destination,
         _verified_bench_report(destination))
@@ -349,29 +354,49 @@ function technique_launch_plan(;ids=String[],gpu::Symbol=:auto)
         for key in sort!(collect(keys(groups));by=k->(k[1]=="gpu",k[2]))]
 end
 
-function _technique_launch_command(group,output,phase,show_progress,article_every_cases)
+function _check_native_stage_report(report,ids,phase)
+    records=TOML.parsefile(report)["technique"]
+    expected=phase=="preflight" ? "oracle_passed" : phase=="profiles" ? "captured" : "complete"
+    problems=String[]
+    for id in ids
+        matched=filter(r->r["id"]==id,records)
+        if length(matched)!=1
+            push!(problems,"Technique "*id*": missing or duplicate progress record")
+            continue
+        end
+        record=only(matched)
+        if record["status"]!=expected
+            push!(problems,"Technique "*id*": "*record["status"]*"; "*
+                get(record,"reason","no reason recorded"))
+        elseif phase=="benchmark" && get(record,"article_status","")!="updated"
+            push!(problems,"Technique "*id*": validated benchmark retained; article: "*
+                get(record,"article_failure","no successful update recorded"))
+        end
+    end
+    isempty(problems) || error("Native stage incomplete:\n"*join(problems,"\n")*
+        "\nFull report: "*report)
+    nothing
+end
+
+function _technique_launch_command(group,output,phase,show_progress,article_every_cases,
+                                   allow_source_changes::Bool=false)
     code="""
     using GaramonBench, TOML
-    phase, output, progress, every = ARGS[1:4]
-    ids = ARGS[5:end]
+    phase, output, progress, every, override = ARGS[1:5]
+    ids = ARGS[6:end]
+    allow_source_changes = override == "true"
     preflight = joinpath(output, "preflight")
-    report = phase == "preflight" ? run_technique_smoke(preflight; ids) :
+    report = phase == "preflight" ? run_technique_smoke(preflight; ids, allow_source_changes) :
         phase == "profiles" ? run_technique_profiles(preflight, joinpath(output, "profiles"); ids) :
         run_technique_bench(preflight, joinpath(output, "benchmark"); ids,
-            show_progress=progress=="true", article_every_cases=parse(Int,every))
-    records = TOML.parsefile(report)["technique"]
-    selected = filter(r->r["id"] in ids, records)
-    expected = phase == "preflight" ? "oracle_passed" : phase == "profiles" ? "captured" : "complete"
-    length(selected)==length(ids) && all(r->r["status"]==expected,selected) ||
-        error("native stage incomplete; inspect "*report)
-    phase == "benchmark" && !all(r->get(r,"article_status","")=="updated",selected) &&
-        error("benchmark cases retained but article update incomplete; inspect "*report)
+            show_progress=progress=="true", article_every_cases=parse(Int,every), allow_source_changes)
+    GaramonBench._check_native_stage_report(report,ids,phase)
     println("Stage complete: ",phase,"; ",join(ids,", "))
     """
     julia=joinpath(Sys.BINDIR,Base.julia_exename())
     args=[julia,"--startup-file=no","--threads="*string(group.threads)*",0",
         "--gcthreads=1","--project="*group.project,"-e",code,
-        string(phase),abspath(output),string(show_progress),string(article_every_cases)]
+        string(phase),abspath(output),string(show_progress),string(article_every_cases),string(allow_source_changes)]
     append!(args,group.ids)
     addenv(Cmd(args),"OPENBLAS_NUM_THREADS"=>"1","OMP_NUM_THREADS"=>"1")
 end
@@ -383,7 +408,7 @@ PerfChecker captures; `:benchmark` prepares and runs dedicated-machine grids.
 """
 function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
         phase::Symbol=:benchmark,show_progress::Bool=true,
-        article_every_cases::Int=0)
+        article_every_cases::Int=0,allow_source_changes::Bool=false)
     phase in (:preflight,:profiles,:benchmark) || throw(ArgumentError("invalid campaign phase"))
     article_every_cases>=0 || throw(ArgumentError("article_every_cases must be nonnegative"))
     VERSION>=v"1.13" || error("Julia 1.13 or later is required")
@@ -419,17 +444,23 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
         end
         save("running")
         try
-            for stage in stages, group in groups
-                println("Stage ",stage,"; threads=",group.threads,
-                    "; environment=",group.environment,"; routes=",join(group.ids,", "))
-                run(_technique_launch_command(group,destination,stage,show_progress,article_every_cases))
-                push!(records,Dict("stage"=>string(stage),"environment"=>group.environment,
-                    "threads"=>group.threads,"ids"=>group.ids,"status"=>"complete"))
+            for stage in stages, group in groups, id in group.ids
+                # A long grid may retain JIT code and allocator pages. Never
+                # carry that process state into the next technique.
+                native=merge(group,(ids=[id],))
+                println("Stage ",stage,"; threads=",native.threads,
+                    "; environment=",native.environment,"; route=",id)
+                run(_technique_launch_command(native,destination,stage,show_progress,article_every_cases,allow_source_changes))
+                push!(records,Dict("stage"=>string(stage),"environment"=>native.environment,
+                    "threads"=>native.threads,"ids"=>native.ids,"status"=>"complete"))
                 save("running")
             end
             save(gpu_status=="unavailable" ? "complete_gpu_skipped" : "complete")
-        catch
-            save("interrupted")
+        catch exception
+            save(exception isa InterruptException ? "interrupted" : "failed")
+            exception isa Base.ProcessFailedException && error(
+                "Native campaign stage failed; the child reported its cause above. "*
+                "Progress and validated cases are retained in "*destination)
             rethrow()
         end
         report
