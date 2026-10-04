@@ -381,7 +381,14 @@ end
 function _technique_launch_command(group,output,phase,show_progress,article_every_cases,
                                    allow_source_changes::Bool=false)
     code="""
+    using DrWatson
+    DrWatson.quickactivate($(repr(group.project)))
+    samefile(dirname(Base.active_project()),$(repr(group.project))) ||
+        error("Native worker activated the wrong project")
     using GaramonBench, TOML
+    samefile(pkgdir(GaramonBench),$(repr(dirname(@__DIR__)))) ||
+        error("Native worker loaded a different GaramonBench checkout")
+    println("Active project: ", Base.active_project())
     phase, output, progress, every, override = ARGS[1:5]
     ids = ARGS[6:end]
     allow_source_changes = override == "true"
@@ -399,6 +406,52 @@ function _technique_launch_command(group,output,phase,show_progress,article_ever
         string(phase),abspath(output),string(show_progress),string(article_every_cases),string(allow_source_changes)]
     append!(args,group.ids)
     addenv(Cmd(args),"OPENBLAS_NUM_THREADS"=>"1","OMP_NUM_THREADS"=>"1")
+end
+
+function _run_native_stage(command,output,phase,id;terminal=stdout,log_limit=64<<10)
+    log_limit>0 || throw(ArgumentError("native log limit must be positive"))
+    directory=DrWatson.datadir(joinpath(abspath(output),"logs"))
+    mkpath(directory)
+    logfile=joinpath(directory,string(phase)*"-"*id*"-"*string(uuid4())*".log")
+    pipe=Pipe()
+    tail=UInt8[]
+    process=nothing
+    try
+        # Avoid ProcessFailedException: it prints the entire inherited
+        # environment and hides the child's scientific or setup failure.
+        process=run(pipeline(ignorestatus(command);stdout=pipe,stderr=pipe);wait=false)
+        close(pipe.in)
+        while !eof(pipe)
+            bytes=readavailable(pipe)
+            write(terminal,bytes)
+            flush(terminal)
+            append!(tail,bytes)
+            if length(tail)>log_limit
+                deleteat!(tail,1:length(tail)-log_limit)
+                # A byte budget must not leave a partial UTF-8 character.
+                while !isempty(tail) && (first(tail)&0xc0)==0x80
+                    popfirst!(tail)
+                end
+            end
+        end
+        wait(process)
+    finally
+        if !isnothing(process) && process_running(process)
+            kill(process)
+            wait(process)
+        end
+        close(pipe)
+        write(logfile,tail)
+    end
+    (;exitcode=process.exitcode,logfile,tail=String(tail))
+end
+
+function _native_stage_failure(result,phase,id;allow_source_changes=false)
+    excerpt=join(last(split(result.tail,'\n'),40),'\n')
+    "Native "*string(phase)*" stage failed for technique "*id*
+        " (exit "*string(result.exitcode)*"). allow_source_changes="*
+        string(allow_source_changes)*".\n"*excerpt*"\nChild log: "*result.logfile*
+        "\nValidated cases are retained; repeat the same output to resume."
 end
 
 """Run reproducible native groups sequentially, with automatic environment and
@@ -450,17 +503,24 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
                 native=merge(group,(ids=[id],))
                 println("Stage ",stage,"; threads=",native.threads,
                     "; environment=",native.environment,"; route=",id)
-                run(_technique_launch_command(native,destination,stage,show_progress,article_every_cases,allow_source_changes))
+                result=_run_native_stage(_technique_launch_command(native,destination,stage,
+                    show_progress,article_every_cases,allow_source_changes),destination,stage,id)
+                if result.exitcode!=0
+                    push!(records,Dict("stage"=>string(stage),"environment"=>native.environment,
+                        "threads"=>native.threads,"ids"=>native.ids,"status"=>"failed",
+                        "exit_code"=>result.exitcode,"child_log"=>result.logfile,
+                        "failure"=>_native_stage_failure(result,stage,id;allow_source_changes)))
+                    save("failed")
+                    error(_native_stage_failure(result,stage,id;allow_source_changes))
+                end
                 push!(records,Dict("stage"=>string(stage),"environment"=>native.environment,
-                    "threads"=>native.threads,"ids"=>native.ids,"status"=>"complete"))
+                    "threads"=>native.threads,"ids"=>native.ids,"status"=>"complete",
+                    "child_log"=>result.logfile))
                 save("running")
             end
             save(gpu_status=="unavailable" ? "complete_gpu_skipped" : "complete")
         catch exception
             save(exception isa InterruptException ? "interrupted" : "failed")
-            exception isa Base.ProcessFailedException && error(
-                "Native campaign stage failed; the child reported its cause above. "*
-                "Progress and validated cases are retained in "*destination)
             rethrow()
         end
         report

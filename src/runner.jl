@@ -34,6 +34,23 @@ function controller_memory_guard(limits)
     nothing
 end
 
+function paired_case_budget(limits,rows,elapsed;baseline_required=false,verification_only=false)
+    nominal=Float64(get(limits,"case_seconds",120))
+    baseline_required || return nominal
+    # A slow exact reference must receive enough time for the declared
+    # sample count. This changes admission only, never the timed functions.
+    candidate=maximum((r.time_ns/1e9 for r in rows if r.phase in
+        ("first_execution","warm"));init=0.0)
+    reference=maximum((r.time_ns/1e9 for r in rows if r.phase in
+        ("baseline_first_execution","baseline_warm"));init=0.0)
+    remaining=verification_only ? 1 : get(limits,"samples",11)+1
+    required=elapsed+2*remaining*(candidate+reference)
+    minimum_seconds=Float64(get(limits,"paired_case_min_seconds",3600))
+    maximum_seconds=Float64(get(limits,"paired_case_max_seconds",21600))
+    0<minimum_seconds<=maximum_seconds || error("invalid paired case time limits")
+    max(nominal,min(max(minimum_seconds,required),maximum_seconds))
+end
+
 function case_guard(rows,start,limits)
     maximum(r.disk_checkpoint_bytes for r in rows;init=0)<=get(limits,"build_disk_bytes",256<<20) || error("build disk budget")
     controller_memory_guard(limits)
@@ -42,8 +59,12 @@ end
 
 function _run_case_unlocked(adapter,case,limits;capture_trial=Ref{Any}(nothing),
                             artifact_dir=nothing,baseline_cache=nothing)
+    limits=Dict{String,Any}(limits)
+    declared_seconds=get(limits,"case_seconds",120)
     rows=NamedTuple[]; id=case_id(case); oracle_status=false
     baseline_required=get(case,"baseline_required",false)
+    baseline_required && (limits["case_seconds"]=paired_case_budget(limits,NamedTuple[],0;
+        baseline_required=true))
     baseline_required && (isnothing(adapter.baseline_execute) ||
         isempty(adapter.baseline_name)) &&
         error("a named Garamon.jl standard baseline is required for "*id)
@@ -107,6 +128,7 @@ function _run_case_unlocked(adapter,case,limits;capture_trial=Ref{Any}(nothing),
             end
             samples=get(limits,"samples",11)
             samples>=1 || error("sample count")
+            limits["case_seconds"]=paired_case_budget(limits,rows,time()-start;baseline_required)
             # BenchmarkTools stops at either its sample count or its seconds
             # deadline. A short warm deadline silently produced fewer samples
             # for a slower high-dimensional case. The case wall budget is the
@@ -140,6 +162,10 @@ function _run_case_unlocked(adapter,case,limits;capture_trial=Ref{Any}(nothing),
                         jit_code_bytes_delta="unmeasured",controller_peak_rss_bytes=Sys.maxrss(),
                         disk_checkpoint_bytes=tree_bytes(temporary)))
                 end
+                # Reserve the final exact reference verification using the
+                # measured warm cost, including observed GC time variation.
+                limits["case_seconds"]=paired_case_budget(limits,rows,time()-start;
+                    baseline_required=true,verification_only=true)
                 baseline_check(state,adapter.baseline_execute(baseline_state)) === true ||
                     error("independent oracle rejected final Garamon.jl baseline")
             end
@@ -183,6 +209,8 @@ function _run_case_unlocked(adapter,case,limits;capture_trial=Ref{Any}(nothing),
         "contract"=>adapter.contract,"adapter_capabilities"=>adapter.capabilities,
         "temporary_build_removed"=>true,"disk_metric"=>"stage boundary observations; not continuous peak",
         "benchmark_backend"=>"BenchmarkTools", "case_elapsed_seconds"=>time()-start,
+        "declared_case_seconds"=>declared_seconds,
+        "effective_case_seconds"=>limits["case_seconds"],
         "diagnostics"=>diagnostics)
     if !isnothing(baseline_file)
         verdict["baseline_cache_file"]=isnothing(artifact_dir) ? baseline_file :

@@ -32,6 +32,39 @@ checkout is intentionally used.
 
 ## Launch the complete technique campaign
 
+From the repository, the self-contained launch is:
+
+```sh
+julia scripts/bench.jl
+```
+
+An absolute script path also works from any working directory. The script
+activates and instantiates its own project before importing dependencies,
+then uses DrWatson `@quickactivate`. Native workers use `quickactivate` and
+verify both their project and the loaded GaramonBench checkout. The CPU/GPU
+thread protocols are selected automatically.
+
+```sh
+julia scripts/bench.jl --allow-source-changes
+julia scripts/bench.jl --preflight --ids=17 --gpu=off
+```
+
+Use `--output=PATH` to select an archive and repeat the same options to resume.
+`--help` lists the options. The default measurement command assumes the
+dedicated machine has been reserved for the campaign.
+
+For an existing campaign, keep its exact archive path. For example:
+
+```sh
+git pull --ff-only
+julia scripts/bench.jl --allow-source-changes --output="$HOME/.julia/dev/GaramonBench/data/garamonbench/output-fallback/run-001-d51d8c7b9776"
+```
+
+All validated cases are verified and skipped. The first pending case resumes;
+an unfinished case is retried. Do not delete the archive. `--ids=17` limits
+a run to that technique; omit it to continue the full campaign. Ctrl-C retains
+validated work, and repeating the same command resumes it.
+
 On the dedicated machine, use Julia 1.13 and launch the controller with
 automatic threads:
 
@@ -98,6 +131,23 @@ intermediate updates during longer routes.
 An ordinary failure prints its actual cause beside the technique ID and in
 the final stage summary. Only Ctrl-C is labelled interrupted. Detailed reasons
 are retained in `benchmark/bench-progress.toml` and each route's `progress.toml`.
+Each native process also retains the last 64 KiB of combined terminal output
+in the campaign's `logs/` directory. `launch-progress.toml` links the log for
+every completed or failed stage. A failed launch includes the technique ID,
+exit code and child error in its final exception; inherited environment
+variables are not dumped by the controller.
+For paired timings, the case deadline is at least one hour
+(`paired_case_min_seconds=3600`). It accounts for the first strategy and
+reference executions and allows twice the estimated cost of all requested
+samples and final verification, capped at six hours
+(`paired_case_max_seconds=21600`). Before final verification, measured warm costs
+refresh the remaining allowance to account for observed GC variation. The
+requested sample count stays unchanged. Each verdict records the nominal
+and effective deadlines. Memory and exact-output checks stay enforced.
+Time checks run at stage boundaries, and BenchmarkTools checks its deadline
+between samples; an individual kernel call is not forcibly preempted. Reaching
+the deadline fails the unfinished case instead of publishing fewer samples.
+The failure and child log are saved, and earlier validated cases stay resumable.
 After updating source code, explicitly allow resuming the existing archive:
 
 ```julia

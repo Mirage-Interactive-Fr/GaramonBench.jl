@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.13.0"
+julia_version = "1.13.1"
 manifest_format = "2.1"
-project_hash = "f4c934c4cba2fa75809bd6042937e2583093ed27"
+project_hash = "30f2fd89bd095816172280756ee7e6eec4c9f319"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1038,7 +1038,7 @@ version = "1.9.1+0"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "OpenSSL_jll", "Zlib_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.11.103+0"
+version = "1.11.104+0"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -2070,7 +2070,7 @@ version = "0.2.3+0"
 [[deps.libLLVM_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "Zlib_jll", "Zstd_jll"]
 uuid = "8f36deef-c2a5-5394-99ed-8e07531fb29a"
-version = "20.1.8+1"
+version = "20.1.8+2"
 
 [[deps.libaom_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]

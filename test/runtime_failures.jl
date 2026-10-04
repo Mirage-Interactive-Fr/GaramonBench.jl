@@ -1,5 +1,59 @@
 using Test, GaramonBench, TOML
 
+@testset "paired budgets admit the declared samples of a slow standard reference" begin
+    rows=[(phase="first_execution",time_ns=1e6),
+        (phase="baseline_first_execution",time_ns=40e9)]
+    limits=Dict("case_seconds"=>60,"samples"=>11)
+    @test GaramonBench.paired_case_budget(limits,rows,45;baseline_required=true)>880
+    @test GaramonBench.paired_case_budget(limits,rows,45)==60
+    @test limits["case_seconds"]==60
+    @test GaramonBench.paired_case_budget(merge(limits,Dict("paired_case_min_seconds"=>60,"paired_case_max_seconds"=>120)),
+        rows,45;baseline_required=true)==120
+    @test GaramonBench.paired_case_budget(limits,NamedTuple[],0;baseline_required=true)==3600
+    @test GaramonBench.paired_case_budget(limits,
+        [(phase="baseline_first_execution",time_ns=1e15)],0;baseline_required=true)==21600
+    observed=vcat(rows,[(phase="baseline_warm",time_ns=80e9)])
+    @test GaramonBench.paired_case_budget(limits,observed,140;
+        baseline_required=true,verification_only=true)>300
+    adapter=BenchmarkAdapter(name="slow_standard_reference",
+        generate=(case,dir,rng)->Int[1,2,3],execute=copy,
+        baseline_execute=state->begin sleep(0.1); copy(state); end,
+        baseline_name="exact_slow_reference",
+        oracle=(state,result)->state==result,contract="exact owned fixture")
+    rows,verdict=GaramonBench.run_case(adapter,
+        Dict{String,Any}("adapter"=>adapter.name,"seed"=>1,"baseline_required"=>true),
+        Dict{String,Any}("case_seconds"=>0.8,"paired_case_min_seconds"=>0.8,
+            "samples"=>11,"controller_rss_bytes"=>4<<30))
+    @test count(r->r.phase=="baseline_warm",rows)==11
+    @test verdict["effective_case_seconds"]>verdict["declared_case_seconds"]
+    @test verdict["oracle_passed"] && verdict["baseline_oracle_passed"]
+end
+
+@testset "native failures retain child output without dumping the environment" begin
+    mktempdir() do output
+        julia=joinpath(Sys.BINDIR,Base.julia_exename())
+        command=addenv(`$julia --startup-file=no --threads=1 -e 'println("child stdout"); println(stderr,"independent oracle rejected fixture"); exit(3)'`,
+            "GARAMON_TEST_PRIVATE_ENV"=>"must-not-be-dumped")
+        terminal=IOBuffer()
+        result=GaramonBench._run_native_stage(command,output,:benchmark,"17";terminal)
+        @test result.exitcode==3
+        @test isfile(result.logfile)
+        @test occursin("child stdout",String(take!(terminal)))
+        @test occursin("independent oracle rejected fixture",read(result.logfile,String))
+        message=GaramonBench._native_stage_failure(result,:benchmark,"17")
+        @test occursin("technique 17",message)
+        @test occursin("independent oracle rejected fixture",message)
+        @test !occursin("must-not-be-dumped",message)
+        @test !occursin("setenv(",message)
+        command=`$julia --startup-file=no --threads=1 -e 'print(repeat("x",100000)); println("final error")'`
+        result=GaramonBench._run_native_stage(command,output,:preflight,"17";
+            terminal=devnull,log_limit=1024)
+        @test result.exitcode==0
+        @test filesize(result.logfile)<=1024
+        @test endswith(result.tail,"final error\n")
+    end
+end
+
 @testset "explicit source-change resume preserves and identifies completed cases" begin
     mktempdir() do root
         fixture=joinpath(root,"source")
@@ -135,7 +189,7 @@ end
         only(technique_launch_plan(ids=["12"],gpu=:off)),"/tmp/campaign",
         :benchmark,false,0,true)
     @test occursin("allow_source_changes",join(command.exec," "))
-    @test command.exec[end-1]=="true"
+        @test command.exec[end-1]=="true"
     mktempdir() do output
         report=run_technique_campaign(output;ids=["12","13"],gpu=:off,
             phase=:preflight,show_progress=false,allow_source_changes=true)
