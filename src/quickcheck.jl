@@ -332,6 +332,7 @@ function run_technique_bench(preflight,output;ids=String[],
                     Base.invokelatest(run_resumable_campaign,
                         config;output=directory,allow_source_changes,
                         baseline_cache_root=joinpath(output,"_baselines"),
+                        skip_memory_budget=true,
                         on_progress=(archive,completed,total)->begin
                             _campaign_meter_update!(meter,archive,completed,total)
                             if update_article && article_every_cases>0 &&
@@ -352,19 +353,32 @@ function run_technique_bench(preflight,output;ids=String[],
                 result["archive"]=directory
             catch exception
                 exception isa InterruptException && rethrow()
-                result["status"]="failed"
+                result["status"]=exception isa MemoryBudgetRestart ? "restart_required" : "failed"
                 result["reason"]=failure_message(exception)
-                println(stderr,"Technique ",row["id"]," failed: ",result["reason"])
+                if exception isa MemoryBudgetRestart
+                    result["budget_skipped_ids"]=resumable_status(config,directory)["budget_skipped_ids"]
+                end
+                println(stderr,"Technique ",row["id"],": ",result["status"],"; ",result["reason"])
             end
         end
-        if result["status"]=="complete" && update_article
+        if result["status"]=="complete"
+            status=resumable_status(technique_bench_config(row;benchmark_root=root),directory)
+            result["validated_cases"]=length(status["completed_ids"])
+            result["budget_skipped_ids"]=status["budget_skipped_ids"]
+            isempty(status["budget_skipped_ids"]) || (result["status"]="complete_with_budget_skips")
+        end
+        if result["status"] in ("complete","complete_with_budget_skips") && update_article
             try
                 article=Base.invokelatest(_refresh_technique_benchmark_article,row,
                     technique_bench_config(row;benchmark_root=root),directory)
-                isnothing(article) && error("completed route has no qualified report cases")
-                result["article_status"]="updated"
-                result["summary_csv"]=article.summary_csv
-                result["figure_pdf"]=article.figure_pdf
+                if isnothing(article) && result["status"]=="complete_with_budget_skips"
+                    result["article_status"]="budget_skipped_no_measurements"
+                else
+                    isnothing(article) && error("completed route has no qualified report cases")
+                    result["article_status"]="updated"
+                    result["summary_csv"]=article.summary_csv
+                    result["figure_pdf"]=article.figure_pdf
+                end
             catch exception
                 exception isa InterruptException && rethrow()
                 result["article_status"]="failed"
@@ -377,6 +391,7 @@ function run_technique_bench(preflight,output;ids=String[],
             Dict("scope"=>"isolated native benchmark; one exact smoke case required per technique",
                 "updated_utc"=>string(now(UTC)),"technique"=>ordered,
                 "complete_count"=>count(r->r["status"]=="complete",ordered),
+                "complete_with_budget_skips_count"=>count(r->r["status"]=="complete_with_budget_skips",ordered),
                 "article_updated_count"=>count(r->get(r,"article_status","")=="updated",ordered),
                 "article_failed_count"=>count(r->get(r,"article_status","")=="failed",ordered)))
     end

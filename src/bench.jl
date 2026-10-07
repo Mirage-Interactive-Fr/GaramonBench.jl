@@ -365,10 +365,13 @@ function _check_native_stage_report(report,ids,phase)
             continue
         end
         record=only(matched)
-        if record["status"]!=expected
+        accepted=record["status"]==expected || phase=="benchmark" && record["status"]=="complete_with_budget_skips"
+        if !accepted
             push!(problems,"Technique "*id*": "*record["status"]*"; "*
                 get(record,"reason","no reason recorded"))
-        elseif phase=="benchmark" && get(record,"article_status","")!="updated"
+        elseif phase=="benchmark" && !(get(record,"article_status","")=="updated" ||
+                record["status"]=="complete_with_budget_skips" &&
+                get(record,"validated_cases",-1)==0 && get(record,"article_status","")=="budget_skipped_no_measurements")
             push!(problems,"Technique "*id*": validated benchmark retained; article: "*
                 get(record,"article_failure","no successful update recorded"))
         end
@@ -397,6 +400,8 @@ function _technique_launch_command(group,output,phase,show_progress,article_ever
         phase == "profiles" ? run_technique_profiles(preflight, joinpath(output, "profiles"); ids) :
         run_technique_bench(preflight, joinpath(output, "benchmark"); ids,
             show_progress=progress=="true", article_every_cases=parse(Int,every), allow_source_changes)
+    records=TOML.parsefile(report)["technique"]
+    any(r->r["id"] in ids && r["status"]=="restart_required",records) && exit(75)
     GaramonBench._check_native_stage_report(report,ids,phase)
     println("Stage complete: ",phase,"; ",join(ids,", "))
     """
@@ -454,6 +459,23 @@ function _native_stage_failure(result,phase,id;allow_source_changes=false)
         "\nValidated cases are retained; repeat the same output to resume."
 end
 
+function _run_native_stage_resumable(command,output,phase,id;on_restart=nothing,terminal=stdout)
+    result=_run_native_stage(command,output,phase,id;terminal)
+    skipped_before=0
+    while phase==:benchmark && result.exitcode==75
+        report=TOML.parsefile(joinpath(output,"benchmark","bench-progress.toml"))
+        record=only(filter(r->r["id"]==id,report["technique"]))
+        skipped_now=length(get(record,"budget_skipped_ids",String[]))
+        record["status"]=="restart_required" && skipped_now>skipped_before ||
+            error("worker requested restart without a new memory exclusion")
+        skipped_before=skipped_now
+        isnothing(on_restart) || on_restart(result,skipped_now)
+        println(terminal,"Technique ",id,": memory-limited case skipped; continuing in a fresh worker")
+        result=_run_native_stage(command,output,phase,id;terminal)
+    end
+    result
+end
+
 """Run reproducible native groups sequentially, with automatic environment and
 thread selection. Ctrl-C retains validated cases; repeat the same output path
 to resume. `phase=:preflight` performs no timings; `:profiles` adds bounded
@@ -503,8 +525,15 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
                 native=merge(group,(ids=[id],))
                 println("Stage ",stage,"; threads=",native.threads,
                     "; environment=",native.environment,"; route=",id)
-                result=_run_native_stage(_technique_launch_command(native,destination,stage,
-                    show_progress,article_every_cases,allow_source_changes),destination,stage,id)
+                command=_technique_launch_command(native,destination,stage,
+                    show_progress,article_every_cases,allow_source_changes)
+                result=_run_native_stage_resumable(command,destination,stage,id;
+                  on_restart=(result,skipped_now)->begin
+                    push!(records,Dict("stage"=>string(stage),"environment"=>native.environment,
+                        "threads"=>native.threads,"ids"=>native.ids,"status"=>"memory_budget_restart",
+                        "budget_skipped_cases"=>skipped_now,"child_log"=>result.logfile))
+                    save("running")
+                  end)
                 if result.exitcode!=0
                     push!(records,Dict("stage"=>string(stage),"environment"=>native.environment,
                         "threads"=>native.threads,"ids"=>native.ids,"status"=>"failed",
@@ -518,7 +547,12 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
                     "child_log"=>result.logfile))
                 save("running")
             end
-            save(gpu_status=="unavailable" ? "complete_gpu_skipped" : "complete")
+            budget_skipped=any(r->r["status"]=="memory_budget_restart",records)
+            if phase==:benchmark && isfile(joinpath(destination,"benchmark","bench-progress.toml"))
+                completed_report=TOML.parsefile(joinpath(destination,"benchmark","bench-progress.toml"))
+                budget_skipped|=any(r->r["status"]=="complete_with_budget_skips",completed_report["technique"])
+            end
+            save(budget_skipped ? "complete_with_budget_skips" : gpu_status=="unavailable" ? "complete_gpu_skipped" : "complete")
         catch exception
             save(exception isa InterruptException ? "interrupted" : "failed")
             rethrow()

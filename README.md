@@ -65,6 +65,28 @@ an unfinished case is retried. Do not delete the archive. `--ids=17` limits
 a run to that technique; omit it to continue the full campaign. Ctrl-C retains
 validated work, and repeating the same command resumes it.
 
+### Memory-limited cases
+
+The technique campaign continues when a case exceeds its configured controller
+RSS budget. It records that case under `benchmark/<id>/budget-skips/` with the
+exact input parameters, measured RSS, limit, and source revision. The worker
+exits and the controller starts a fresh process for the next pending case.
+Validated cases and shared baseline measurements remain available; incomplete
+samples are never published as measurements. No extra launch flag is needed.
+
+Resume after updating with the same command and archive path shown above.
+Recorded memory exclusions are skipped on subsequent resumes. Progress reports
+use `complete_with_budget_skips` to distinguish a finished campaign with
+exclusions from a campaign in which every case produced validated measurements.
+Each exclusion is an observation at a case boundary on this machine, not a
+claim that the mathematical strategy necessarily requires that much memory.
+For plots with measured cases, red crosses identify memory exclusions without
+assigning them a timing ratio; their parameters and reasons are exported in
+`budget_skips.csv`. A route with no validated measurements keeps its placeholder.
+Oracle failures, damaged archives, and other errors still stop the affected stage.
+The RSS guard is checked at stage boundaries; it is not a hard operating-system
+memory cap.
+
 On the dedicated machine, use Julia 1.13 and launch the controller with
 automatic threads:
 

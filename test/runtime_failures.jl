@@ -151,8 +151,98 @@ end
             case=Dict{String,Any}("adapter"=>adapter.name,"seed"=>1)
             @test GaramonBench.run_case_preflight(adapter,case,limits)["oracle_passed"]
         end
-        @test_throws ErrorException GaramonBench.controller_memory_guard(
+        @test_throws GaramonBench.ControllerMemoryBudget GaramonBench.controller_memory_guard(
             Dict("controller_rss_bytes"=>1))
+    end
+end
+
+@testset "memory exclusions resume at the next case without accepting partial samples" begin
+    mktempdir() do root
+        config=load_config(joinpath(pkgdir(GaramonBench),"config","smoke.toml"))
+        config["campaign"]["backend"]="benchmarktools"
+        config["campaign"]["condition"]="isolated"
+        config["case_defaults"]["adapter"]="memory_skip_fixture"
+        config["case_defaults"]["baseline_required"]=true
+        config["limits"]["samples"]=1
+        calls=Int[]
+        register_adapter!(BenchmarkAdapter(name="memory_skip_fixture",
+            generate=(case,dir,rng)->begin
+                push!(calls,case["length"])
+                case["length"]==4 && GaramonBench.controller_memory_guard(
+                    Dict("controller_rss_bytes"=>1))
+                collect(1:case["length"])
+            end,execute=copy,baseline_execute=copy,baseline_name="fixture_standard",
+            oracle=(state,result)->state==result,
+            contract="exact memory exclusion fixture");replace=true)
+        output=joinpath(root,"campaign")
+        @test_throws GaramonBench.MemoryBudgetRestart run_resumable_campaign(config;
+            output,skip_memory_budget=true)
+        status=resumable_status(config,output)
+        skipped=only(status["budget_skipped_ids"])
+        @test isempty(status["completed_ids"])
+        @test length(status["pending_ids"])==1
+        @test !isfile(joinpath(output,"staging",skipped,"completion.toml"))
+        @test TOML.parsefile(joinpath(output,"progress.toml"))["status"]=="restart_required"
+        @test run_resumable_campaign(config;output,skip_memory_budget=true)==output
+        @test calls==[4,16]
+        @test run_resumable_campaign(config;output,skip_memory_budget=true)==output
+        @test calls==[4,16]
+        status=resumable_status(config,output)
+        @test status["status"]=="complete_with_budget_skips"
+        @test isempty(status["pending_ids"])
+        @test length(status["completed_ids"])==1
+        audit=audit_resumable_archive(config,output)
+        @test audit["budget_skipped_ids"]==[skipped]
+        @test isempty(audit["pending_ids"])
+        rows,_=GaramonBench._technique_report_rows(Dict("id"=>"fixture"),config,output)
+        @test length(rows)==1
+        @test only(rows).case_id!=skipped
+        recordpath=joinpath(output,"budget-skips",skipped*".toml")
+        record=TOML.parsefile(recordpath)
+        record["case"]["seed"]+=1
+        GaramonBench.write_toml(recordpath,record)
+        @test_throws ErrorException resumable_status(config,output)
+        register_adapter!(BenchmarkAdapter(name="memory_skip_fixture",
+            generate=(case,dir,rng)->Int[1],execute=copy,baseline_execute=copy,
+            baseline_name="fixture_standard",oracle=(state,result)->false,
+            contract="oracle failure must not be excluded");replace=true)
+        failed=joinpath(root,"oracle-failure")
+        @test_throws ErrorException run_resumable_campaign(config;
+            output=failed,skip_memory_budget=true)
+        @test !isdir(joinpath(failed,"budget-skips"))
+    end
+end
+
+@testset "memory worker restarts are fresh and must make forward progress" begin
+    mktempdir() do output
+        mkpath(joinpath(output,"benchmark"))
+        code="""
+        using TOML
+        output=ARGS[1]
+        state=joinpath(output,"attempts.toml")
+        pids=isfile(state) ? TOML.parsefile(state)["pids"] : Int[]
+        push!(pids,getpid())
+        open(state,"w") do io; TOML.print(io,Dict("pids"=>pids)); end
+        if length(pids)==1
+            open(joinpath(output,"benchmark","bench-progress.toml"),"w") do io
+                TOML.print(io,Dict("technique"=>[Dict("id"=>"17",
+                    "status"=>"restart_required","budget_skipped_ids"=>["case-a"])]))
+            end
+            exit(75)
+        end
+        println("next case completed")
+        """
+        julia=joinpath(Sys.BINDIR,Base.julia_exename())
+        command=Cmd([julia,"--startup-file=no","--threads=1","-e",code,output])
+        restarts=Int[]
+        result=GaramonBench._run_native_stage_resumable(command,output,:benchmark,"17";
+            terminal=devnull,on_restart=(r,n)->push!(restarts,n))
+        @test result.exitcode==0
+        @test restarts==[1]
+        pids=TOML.parsefile(joinpath(output,"attempts.toml"))["pids"]
+        @test length(unique(pids))==2
+        stuck=`$julia --startup-file=no -e 'exit(75)'`
+        @test_throws ErrorException GaramonBench._run_native_stage_resumable(stuck,output,:benchmark,"17";terminal=devnull)
     end
 end
 
@@ -181,6 +271,17 @@ end
         @test occursin("Technique 12: failed; controller RSS budget",sprint(showerror,exception))
         @test isnothing(GaramonBench._check_native_stage_report(report,["13"],"benchmark"))
         @test_throws ErrorException GaramonBench._check_native_stage_report(report,["14"],"benchmark")
+        records=[Dict("id"=>"17","status"=>"complete_with_budget_skips",
+            "validated_cases"=>0,"budget_skipped_ids"=>["case-a"],
+            "article_status"=>"budget_skipped_no_measurements")]
+        GaramonBench.write_toml(report,Dict("technique"=>records))
+        @test isnothing(GaramonBench._check_native_stage_report(report,["17"],"benchmark"))
+        records[1]["validated_cases"]=1
+        GaramonBench.write_toml(report,Dict("technique"=>records))
+        @test_throws ErrorException GaramonBench._check_native_stage_report(report,["17"],"benchmark")
+        records[1]["article_status"]="updated"
+        GaramonBench.write_toml(report,Dict("technique"=>records))
+        @test isnothing(GaramonBench._check_native_stage_report(report,["17"],"benchmark"))
     end
 end
 

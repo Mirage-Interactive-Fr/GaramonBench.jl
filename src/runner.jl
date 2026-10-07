@@ -22,6 +22,13 @@ function resident_rss_bytes()
     parse(Int,split(read("/proc/self/statm",String))[2])*Sys.PAGESIZE
 end
 
+struct ControllerMemoryBudget <: Exception
+    observed::Int
+    limit::Int
+end
+Base.showerror(io::IO,e::ControllerMemoryBudget)=print(io,
+    "controller RSS budget: current resident bytes ",e.observed," exceed ",e.limit)
+
 function controller_memory_guard(limits)
     limit=get(limits,"controller_rss_bytes",2<<30)
     observed=resident_rss_bytes()
@@ -29,8 +36,7 @@ function controller_memory_guard(limits)
         GC.gc(true) # Outside the timed kernel: reclaim prior case state.
         observed=resident_rss_bytes()
     end
-    observed<=limit || error("controller RSS budget: current resident bytes "*
-        string(observed)*" exceed "*string(limit))
+    observed<=limit || throw(ControllerMemoryBudget(observed,limit))
     nothing
 end
 

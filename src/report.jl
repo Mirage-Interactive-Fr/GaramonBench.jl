@@ -70,7 +70,7 @@ function _technique_report_rows(row,config,archive)
     rows,parameters
 end
 
-function _render_technique_plot_loaded(xkcd,row,rows,total,destination)
+function _render_technique_plot_loaded(xkcd,row,rows,total,destination;budget_skips=NamedTuple[])
     isempty(rows) && error("no qualified technique cases to plot")
     xkcd.with_theme(xkcd.theme_xkcd()) do
         figure=xkcd.Figure(size=(960,520),backgroundcolor=:white)
@@ -93,11 +93,16 @@ function _render_technique_plot_loaded(xkcd,row,rows,total,destination)
                 markersize=13,label=family*" >10× baseline")
         end
         xkcd.hlines!(axis,[1.0];color=:black,linestyle=:dash)
+        if !isempty(budget_skips)
+            xkcd.scatter!(axis,[r.dimension for r in budget_skips],fill(12.0,length(budget_skips));
+                color=:firebrick,marker=:xcross,markersize=14,
+                label="RSS budget exceeded (no timing)")
+        end
         xkcd.hlines!(axis,[10.0];color=:firebrick,linestyle=:dot)
         xkcd.ylims!(axis,1e-4,16)
         xkcd.axislegend(axis;position=:rb)
         xkcd.Label(figure[2,1],
-            "Each point retains its full scenario in the CSV + parameter table. Triangles: >10× baseline.\nRatios below 10⁻⁴ are clipped; zero-resolution baselines are omitted.",fontsize=14)
+            "Each point retains its full scenario in the CSV + parameter table. Triangles: >10× baseline.\nRed crosses are budget exclusions, not ratios. Ratios below 10⁻⁴ are clipped.",fontsize=14)
         xkcd.save(destination,figure)
     end
     destination
@@ -110,6 +115,15 @@ function _refresh_technique_benchmark_article(row,config,archive;
     rows,parameters=_technique_report_rows(row,config,archive)
     isempty(rows) && return nothing
     manifest=TOML.parsefile(joinpath(archive,"campaign.toml"))
+    cases=expand_cases(config)
+    skipped_ids=_resume_budget_ids(archive,cases,manifest)
+    budget_skips=[begin
+        record=TOML.parsefile(joinpath(archive,"budget-skips",case_id(case)*".toml"))
+        parameters[case_id(case)]=case
+        (;case_id=case_id(case),dimension=get(case,"dimension",0),
+          status="memory_budget_exceeded",observed_rss_bytes=record["observed_rss_bytes"],
+          limit_rss_bytes=record["limit_rss_bytes"],reason=record["reason"])
+    end for case in cases if case_id(case) in skipped_ids]
     signature=manifest["run_signature"]
     archive_id=first(bytes2hex(sha256(abspath(archive))),12)
     directory=joinpath(processed_root,row["id"],first(signature,12),archive_id)
@@ -123,6 +137,7 @@ function _refresh_technique_benchmark_article(row,config,archive;
         isfile(temporary) && rm(temporary)
     end
     _resume_write(joinpath(directory,"case_parameters.toml"),parameters)
+    isempty(budget_skips) || write_csv(joinpath(directory,"budget_skips.csv"),budget_skips)
     mkpath(figure_root)
     figure=joinpath(figure_root,"plot_technique_"*row["id"]*".pdf")
     @eval import CairoMakie
@@ -134,7 +149,7 @@ function _refresh_technique_benchmark_article(row,config,archive;
         mktempdir() do temporary
             built=joinpath(temporary,"plot.pdf")
             Base.invokelatest(_render_technique_plot_loaded,xkcd,row,rows,
-                length(expand_cases(config)),built)
+                length(expand_cases(config)),built;budget_skips)
             _publish_article_pdf(built,figure)
         end
     finally
@@ -146,6 +161,7 @@ function _refresh_technique_benchmark_article(row,config,archive;
         "mixed_source_revisions"=>get(manifest,"mixed_source_revisions",false),
         "execution_signatures"=>sort!(unique(r.execution_signature for r in rows)),
         "campaign_status"=>manifest["status"],"completed_cases"=>length(rows),
+        "budget_skipped_cases"=>length(budget_skips),
         "total_cases"=>length(expand_cases(config)),"summary_sha256"=>_resume_sha(summary),
         "parameters_sha256"=>_resume_sha(joinpath(directory,"case_parameters.toml")),
         "figure_sha256"=>_resume_sha(figure),

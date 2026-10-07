@@ -308,9 +308,11 @@ function resumable_status(config,output)
     completed=_resume_progress(output,cases,manifest["run_signature"],
         get(get(config,"limits",Dict()),"samples",11);
         backend=get(config["campaign"],"backend","perfchecker"))
-    Dict("status"=>length(completed)==length(cases) ? "complete" : "incomplete",
+    skipped=_resume_budget_ids(output,cases,manifest)
+    pending=setdiff(case_id.(cases),union(completed,skipped))
+    Dict("status"=>isempty(pending) ? (isempty(skipped) ? "complete" : "complete_with_budget_skips") : "incomplete",
         "case_count"=>length(cases),"completed_ids"=>completed,
-        "pending_ids"=>setdiff(case_id.(cases),completed))
+        "budget_skipped_ids"=>skipped,"pending_ids"=>pending)
 end
 resumable_status(path::AbstractString,output)=resumable_status(load_config(path),output)
 
@@ -396,9 +398,11 @@ function audit_resumable_archive(config,output)
             false
         end
     end
+    skipped=_resume_budget_ids(output,cases,manifest)
     Dict("archive_integrity"=>"validated","case_count"=>length(cases),
         "completed_ids"=>completed,
-        "pending_ids"=>setdiff(case_id.(cases),completed),
+        "budget_skipped_ids"=>skipped,
+        "pending_ids"=>setdiff(case_id.(cases),union(completed,skipped)),
         "current_machine_matches"=>current_machine_match,
         "current_environment_matches"=>current_environment_match,
         "current_sources_match"=>current_sources,
@@ -410,6 +414,33 @@ function audit_resumable_archive(config,output)
 end
 audit_resumable_archive(path::AbstractString,output)=
     audit_resumable_archive(load_config(path),output)
+
+struct MemoryBudgetRestart <: Exception
+    caseid::String
+end
+Base.showerror(io::IO,e::MemoryBudgetRestart)=print(io,
+    "case ",e.caseid," skipped at the RSS budget; restart worker to continue")
+
+# Budget exclusions are separate from validated measurements. Never turn an
+# incomplete sample set into a completion marker or a numerical article result.
+function _resume_budget_ids(output,cases,manifest)
+    skipped=String[]
+    accepted=[manifest["run_signature"]; [r["run_signature"] for r in get(manifest,"source_revisions",Any[])]]
+    for case in cases
+        id=case_id(case)
+        path=joinpath(output,"budget-skips",id*".toml")
+        isfile(path) || continue
+        record=TOML.parsefile(path)
+        record["status"]=="memory_budget_exceeded" && record["case_id"]==id &&
+            record["case"]==case && record["run_signature"]==manifest["run_signature"] &&
+            record["execution_signature"] in accepted &&
+            record["observed_rss_bytes"]>record["limit_rss_bytes"] ||
+            error("invalid memory budget exclusion: "*id)
+        ispath(joinpath(output,"cases",id)) && error("case is both validated and budget-excluded: "*id)
+        push!(skipped,id)
+    end
+    skipped
+end
 
 mutable struct _CampaignMeter
     label::String
@@ -449,7 +480,7 @@ function _campaign_meter_close!(display::_CampaignMeter;complete::Bool,failure=n
 end
 
 function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache_root=nothing,
-                                allow_source_changes::Bool=false)
+                                allow_source_changes::Bool=false,skip_memory_budget::Bool=false)
     cases=expand_cases(config)
     backend=get(config["campaign"],"backend","")
     backend in ("perfchecker","benchmarktools","oracle_preflight") ||
@@ -477,14 +508,18 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
                 "threads"=>Threads.nthreads()))
         samples=get(limits,"samples",11)
         completed=_resume_progress(output,cases,signature,samples;backend)
+        skipped=_resume_budget_ids(output,cases,manifest)
+        pending()=setdiff(case_id.(cases),union(completed,skipped))
         _resume_write(joinpath(output,"progress.toml"),
             Dict("status"=>"running","completed_ids"=>completed,
-                "pending_ids"=>setdiff(case_id.(cases),completed)))
+                "budget_skipped_ids"=>skipped,"pending_ids"=>pending()))
         isnothing(on_progress) || on_progress(output,completed,length(cases))
         try
             for case in cases
                 id=case_id(case)
-                id in completed && continue
+                (id in completed || id in skipped) && continue
+                # Release previous case objects outside every measured kernel.
+                GC.gc(true)
                 stage=joinpath(output,"staging",id)
                 if ispath(stage)
                     isdir(stage) || error("unexpected staging file: "*stage)
@@ -493,14 +528,29 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
                 end
                 mkpath(stage)
                 _resume_write(joinpath(stage,"case.toml"),case)
-                rows,verdict=if backend=="oracle_preflight"
-                    NamedTuple[],run_case_preflight(ADAPTERS[case["adapter"]],case,limits)
-                elseif backend=="benchmarktools"
-                    run_case(ADAPTERS[case["adapter"]],case,limits;
-                        artifact_dir=stage,baseline_cache)
-                else
-                    run_case_perfchecker(ADAPTERS[case["adapter"]],case,limits;
-                        artifact_dir=stage)
+                rows,verdict=try
+                    if backend=="oracle_preflight"
+                        NamedTuple[],run_case_preflight(ADAPTERS[case["adapter"]],case,limits)
+                    elseif backend=="benchmarktools"
+                        run_case(ADAPTERS[case["adapter"]],case,limits;
+                            artifact_dir=stage,baseline_cache)
+                    else
+                        run_case_perfchecker(ADAPTERS[case["adapter"]],case,limits;
+                            artifact_dir=stage)
+                    end
+                catch exception
+                    if skip_memory_budget && exception isa ControllerMemoryBudget
+                        mkpath(joinpath(output,"budget-skips"))
+                        _resume_write(joinpath(output,"budget-skips",id*".toml"),Dict(
+                            "status"=>"memory_budget_exceeded","case_id"=>id,"case"=>case,
+                            "run_signature"=>signature,"execution_signature"=>execution["run_signature"],
+                            "observed_rss_bytes"=>exception.observed,"limit_rss_bytes"=>exception.limit,
+                            "reason"=>failure_message(exception),"recorded_utc"=>string(now(UTC))))
+                        push!(skipped,id)
+                        println(stderr,"Case ",id,": skipped (memory budget); validated cases retained")
+                        throw(MemoryBudgetRestart(id))
+                    end
+                    rethrow()
                 end
                 backend=="oracle_preflight" || write_csv(joinpath(stage,"samples.csv"),rows)
                 _resume_write(joinpath(stage,"verdict.toml"),verdict)
@@ -526,23 +576,24 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
                 push!(completed,id)
                 _resume_write(joinpath(output,"progress.toml"),
                     Dict("status"=>"running","completed_ids"=>completed,
-                        "pending_ids"=>setdiff(case_id.(cases),completed)))
+                        "budget_skipped_ids"=>skipped,"pending_ids"=>pending()))
                 isnothing(on_progress) || on_progress(output,completed,length(cases))
             end
-            manifest["status"]="complete"
+            manifest["status"]=isempty(skipped) ? "complete" : "complete_with_budget_skips"
+            manifest["budget_skipped_ids"]=skipped
             manifest["completed_utc"]=string(now(UTC))
             _resume_write(joinpath(output,"campaign.toml"),manifest)
         catch exception
             _resume_write(joinpath(output,"progress.toml"),
-                Dict("status"=>exception isa InterruptException ? "interrupted" : "failed","completed_ids"=>completed,
-                    "pending_ids"=>setdiff(case_id.(cases),completed),
+                Dict("status"=>exception isa MemoryBudgetRestart ? "restart_required" : exception isa InterruptException ? "interrupted" : "failed","completed_ids"=>completed,
+                    "budget_skipped_ids"=>skipped,"pending_ids"=>pending(),
                     "failure"=>failure_message(exception)))
             rethrow()
         finally
             _resume_write(joinpath(output,"machine_after.toml"),machine_snapshot())
         end
         _resume_write(joinpath(output,"progress.toml"),
-            Dict("status"=>"complete","completed_ids"=>completed,
+            Dict("status"=>manifest["status"],"completed_ids"=>completed,"budget_skipped_ids"=>skipped,
                 "pending_ids"=>String[]))
     end
     output
