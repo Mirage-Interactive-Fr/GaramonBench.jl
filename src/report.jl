@@ -96,7 +96,7 @@ function _render_technique_plot_loaded(xkcd,row,rows,total,destination;budget_sk
         if !isempty(budget_skips)
             xkcd.scatter!(axis,[r.dimension for r in budget_skips],fill(12.0,length(budget_skips));
                 color=:firebrick,marker=:xcross,markersize=14,
-                label="RSS budget exceeded (no timing)")
+                label="Resource exclusion (no timing)")
         end
         xkcd.hlines!(axis,[10.0];color=:firebrick,linestyle=:dot)
         xkcd.ylims!(axis,1e-4,16)
@@ -121,8 +121,10 @@ function _refresh_technique_benchmark_article(row,config,archive;
         record=TOML.parsefile(joinpath(archive,"budget-skips",case_id(case)*".toml"))
         parameters[case_id(case)]=case
         (;case_id=case_id(case),dimension=get(case,"dimension",0),
-          status="memory_budget_exceeded",observed_rss_bytes=record["observed_rss_bytes"],
-          limit_rss_bytes=record["limit_rss_bytes"],reason=record["reason"])
+          status=record["status"],kind=get(record,"kind","controller_rss"),
+          observed_rss_bytes=get(record,"observed_rss_bytes","unmeasured"),
+          limit_rss_bytes=get(record,"limit_rss_bytes","unmeasured"),
+          signal=get(record,"signal",0),reason=record["reason"])
     end for case in cases if case_id(case) in skipped_ids]
     signature=manifest["run_signature"]
     archive_id=first(bytes2hex(sha256(abspath(archive))),12)

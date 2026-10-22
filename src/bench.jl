@@ -402,6 +402,7 @@ function _technique_launch_command(group,output,phase,show_progress,article_ever
             show_progress=progress=="true", article_every_cases=parse(Int,every), allow_source_changes)
     records=TOML.parsefile(report)["technique"]
     any(r->r["id"] in ids && r["status"]=="restart_required",records) && exit(75)
+    any(r->r["id"] in ids && r["status"]=="resource_unavailable",records) && exit(76)
     GaramonBench._check_native_stage_report(report,ids,phase)
     println("Stage complete: ",phase,"; ",join(ids,", "))
     """
@@ -413,6 +414,27 @@ function _technique_launch_command(group,output,phase,show_progress,article_ever
     addenv(Cmd(args),"OPENBLAS_NUM_THREADS"=>"1","OMP_NUM_THREADS"=>"1")
 end
 
+function _kill_detached_worker_processes(token)
+    Sys.islinux() || return nothing
+    marker="GARAMONBENCH_WORKER_TOKEN="*token
+    uid=ccall(:geteuid,Cuint,())
+    for name in readdir("/proc")
+        pid=tryparse(Int,name)
+        (isnothing(pid) || pid==getpid()) && continue
+        path=joinpath("/proc",name,"environ")
+        try
+            stat(path).uid==uid || continue
+            # LocalManager detaches workers into separate process groups.
+            # Only the exact token inherited from this launch authorizes cleanup.
+            marker in split(read(path,String),'\0') || continue
+            ccall(:kill,Cint,(Cint,Cint),pid,9)
+        catch exception
+            exception isa Base.IOError || exception isa SystemError || rethrow()
+        end
+    end
+    nothing
+end
+
 function _run_native_stage(command,output,phase,id;terminal=stdout,log_limit=64<<10)
     log_limit>0 || throw(ArgumentError("native log limit must be positive"))
     directory=DrWatson.datadir(joinpath(abspath(output),"logs"))
@@ -421,11 +443,24 @@ function _run_native_stage(command,output,phase,id;terminal=stdout,log_limit=64<
     pipe=Pipe()
     tail=UInt8[]
     process=nothing
+    worker_token=string(uuid4())
+    worker_pid=0
+    own_group=false
     try
         # Avoid ProcessFailedException: it prints the entire inherited
         # environment and hides the child's scientific or setup failure.
-        process=run(pipeline(ignorestatus(command);stdout=pipe,stderr=pipe);wait=false)
+        isolated=Cmd(addenv(command,"GARAMONBENCH_WORKER_TOKEN"=>worker_token);detach=true)
+        process=run(pipeline(ignorestatus(isolated);stdout=pipe,stderr=pipe);wait=false)
+        worker_pid=getpid(process)
+        own_group=Sys.islinux() && worker_pid>0 &&
+            ccall(:getpgid,Cint,(Cint,),worker_pid)==worker_pid
         close(pipe.in)
+        reaper=@async begin
+            wait(process)
+            # Descendants can retain the pipe after their parent dies.
+            own_group && ccall(:kill,Cint,(Cint,Cint),-worker_pid,9)
+            _kill_detached_worker_processes(worker_token)
+        end
         while !eof(pipe)
             bytes=readavailable(pipe)
             write(terminal,bytes)
@@ -440,40 +475,103 @@ function _run_native_stage(command,output,phase,id;terminal=stdout,log_limit=64<
             end
         end
         wait(process)
+        wait(reaper)
     finally
         if !isnothing(process) && process_running(process)
-            kill(process)
+            kill(process,9)
             wait(process)
         end
+        # Only this worker's verified private process group: release any
+        # resident Julia/C++ descendants after a killed controller as well.
+        own_group && ccall(:kill,Cint,(Cint,Cint),-worker_pid,9)
+        _kill_detached_worker_processes(worker_token)
         close(pipe)
         write(logfile,tail)
     end
-    (;exitcode=process.exitcode,logfile,tail=String(tail))
+    (;exitcode=process.exitcode,termsignal=process.termsignal,worker_token,worker_pid,
+      logfile,tail=String(tail))
 end
 
 function _native_stage_failure(result,phase,id;allow_source_changes=false)
     excerpt=join(last(split(result.tail,'\n'),40),'\n')
     "Native "*string(phase)*" stage failed for technique "*id*
-        " (exit "*string(result.exitcode)*"). allow_source_changes="*
+        " (exit "*string(result.exitcode)*", signal "*string(result.termsignal)*"). allow_source_changes="*
         string(allow_source_changes)*".\n"*excerpt*"\nChild log: "*result.logfile*
         "\nValidated cases are retained; repeat the same output to resume."
 end
 
-function _run_native_stage_resumable(command,output,phase,id;on_restart=nothing,terminal=stdout)
-    result=_run_native_stage(command,output,phase,id;terminal)
-    skipped_before=0
-    while phase==:benchmark && result.exitcode==75
-        report=TOML.parsefile(joinpath(output,"benchmark","bench-progress.toml"))
-        record=only(filter(r->r["id"]==id,report["technique"]))
-        skipped_now=length(get(record,"budget_skipped_ids",String[]))
-        record["status"]=="restart_required" && skipped_now>skipped_before ||
-            error("worker requested restart without a new memory exclusion")
-        skipped_before=skipped_now
-        isnothing(on_restart) || on_restart(result,skipped_now)
-        println(terminal,"Technique ",id,": memory-limited case skipped; continuing in a fresh worker")
-        result=_run_native_stage(command,output,phase,id;terminal)
+function _recover_terminated_case!(output,phase,id,result)
+    directory=joinpath(output,string(phase),id)
+    journal=joinpath(directory,"active-case.toml")
+    isfile(journal) || return nothing
+    _resume_lock(directory) do
+        active=TOML.parsefile(journal)
+        # A killed startup must never exclude a stale case from an earlier attempt.
+        active["worker_token"]==result.worker_token && active["worker_pid"]==result.worker_pid || return nothing
+        config=TOML.parsefile(joinpath(directory,"configuration.toml"))
+        manifest=TOML.parsefile(joinpath(directory,"campaign.toml"))
+        active["run_signature"]==manifest["run_signature"] &&
+            active["execution_signature"]==_resume_execution(manifest)["run_signature"] ||
+            error("terminated worker journal has an invalid source identity")
+        cases=expand_cases(config)
+        case=only(filter(c->case_id(c)==active["case_id"],cases))
+        case==active["case"] || error("terminated worker journal has different case parameters")
+        completed=_resume_progress(directory,cases,manifest["run_signature"],
+            get(config["limits"],"samples",11);backend=config["campaign"]["backend"])
+        previous_skips=_resume_budget_ids(directory,cases,manifest)
+        if !(active["case_id"] in completed || active["case_id"] in previous_skips)
+            details=Dict{String,Any}("kind"=>"worker_terminated","signal"=>result.termsignal,
+                "exit_code"=>result.exitcode,"worker_pid"=>result.worker_pid,
+                "worker_token"=>result.worker_token,"memory_cause_confirmed"=>false,
+                "child_log"=>result.logfile)
+            _record_resource_skip!(directory,case,manifest,details,
+                "Worker terminated by signal $(result.termsignal); memory cause unconfirmed")
+        end
+        skipped=_resume_budget_ids(directory,cases,manifest)
+        _resume_write(joinpath(directory,"progress.toml"),Dict("status"=>"restart_required",
+            "completed_ids"=>completed,"budget_skipped_ids"=>skipped,
+            "pending_ids"=>setdiff(case_id.(cases),union(completed,skipped))))
+        rm(journal;force=true)
+        length(completed)+length(skipped)
     end
-    result
+end
+
+function _run_native_stage_resumable(command,output,phase,id;on_restart=nothing,terminal=stdout)
+    skipped_before=0
+    terminal_before=0
+    while true
+        result=_run_native_stage(command,output,phase,id;terminal)
+        result.termsignal in (2,15) && throw(InterruptException())
+        if result.termsignal!=0
+            advanced=phase==:benchmark ? _recover_terminated_case!(output,phase,id,result) : nothing
+            if phase==:benchmark && !isnothing(advanced) && advanced>terminal_before
+                terminal_before=advanced
+                isnothing(on_restart) || on_restart(result,advanced)
+                println(terminal,"Technique ",id,": terminated case recorded; continuing in a fresh worker")
+                continue
+            end
+            return merge(result,(stage_skipped=true,resource_reason=
+                "Worker terminated by signal $(result.termsignal); memory cause unconfirmed; remaining route cases unmeasured"))
+        elseif result.exitcode==76
+            path=phase==:preflight ? joinpath(output,"preflight","quickcheck.toml") :
+                phase==:profiles ? joinpath(output,"profiles","profile-progress.toml") :
+                joinpath(output,"benchmark","bench-progress.toml")
+            record=only(filter(r->r["id"]==id,TOML.parsefile(path)["technique"]))
+            record["status"]=="resource_unavailable" || error("invalid resource stage exit")
+            return merge(result,(stage_skipped=true,resource_reason=get(record,"reason","memory resource unavailable")))
+        elseif phase==:benchmark && result.exitcode==75
+            report=TOML.parsefile(joinpath(output,"benchmark","bench-progress.toml"))
+            record=only(filter(r->r["id"]==id,report["technique"]))
+            skipped_now=length(get(record,"budget_skipped_ids",String[]))
+            record["status"]=="restart_required" && skipped_now>skipped_before ||
+                error("worker requested restart without a new resource exclusion")
+            skipped_before=skipped_now
+            isnothing(on_restart) || on_restart(result,skipped_now)
+            println(terminal,"Technique ",id,": resource-limited case excluded; continuing in a fresh worker")
+            continue
+        end
+        return merge(result,(stage_skipped=false,resource_reason=""))
+    end
 end
 
 """Run reproducible native groups sequentially, with automatic environment and
@@ -509,6 +607,7 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
             end
         end
         records=Dict{String,Any}[]
+        blocked=Set{String}()
         stages=phase==:preflight ? [:preflight] : [:preflight,phase]
         report=joinpath(destination,"launch-progress.toml")
         function save(status)
@@ -520,6 +619,12 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
         save("running")
         try
             for stage in stages, group in groups, id in group.ids
+                if stage!=:preflight && id in blocked
+                    push!(records,Dict("stage"=>string(stage),"ids"=>[id],
+                        "status"=>"resource_unavailable","failure"=>"Preflight resource failure; route remains unmeasured"))
+                    save("running")
+                    continue
+                end
                 # A long grid may retain JIT code and allocator pages. Never
                 # carry that process state into the next technique.
                 native=merge(group,(ids=[id],))
@@ -530,10 +635,21 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
                 result=_run_native_stage_resumable(command,destination,stage,id;
                   on_restart=(result,skipped_now)->begin
                     push!(records,Dict("stage"=>string(stage),"environment"=>native.environment,
-                        "threads"=>native.threads,"ids"=>native.ids,"status"=>"memory_budget_restart",
-                        "budget_skipped_cases"=>skipped_now,"child_log"=>result.logfile))
+                        "threads"=>native.threads,"ids"=>native.ids,"status"=>"resource_restart",
+                        "resource_progress_count"=>skipped_now,"child_log"=>result.logfile,
+                        "signal"=>result.termsignal))
                     save("running")
                   end)
+                if result.stage_skipped
+                    stage==:preflight && push!(blocked,id)
+                    push!(records,Dict("stage"=>string(stage),"environment"=>native.environment,
+                        "threads"=>native.threads,"ids"=>native.ids,"status"=>"resource_unavailable",
+                        "exit_code"=>result.exitcode,"signal"=>result.termsignal,
+                        "child_log"=>result.logfile,"failure"=>result.resource_reason))
+                    println(stderr,"Technique ",id,"; stage ",stage,": resource failure recorded; continuing campaign")
+                    save("running")
+                    continue
+                end
                 if result.exitcode!=0
                     push!(records,Dict("stage"=>string(stage),"environment"=>native.environment,
                         "threads"=>native.threads,"ids"=>native.ids,"status"=>"failed",
@@ -547,7 +663,7 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
                     "child_log"=>result.logfile))
                 save("running")
             end
-            budget_skipped=any(r->r["status"]=="memory_budget_restart",records)
+            budget_skipped=any(r->r["status"] in ("resource_restart","resource_unavailable"),records)
             if phase==:benchmark && isfile(joinpath(destination,"benchmark","bench-progress.toml"))
                 completed_report=TOML.parsefile(joinpath(destination,"benchmark","bench-progress.toml"))
                 budget_skipped|=any(r->r["status"]=="complete_with_budget_skips",completed_report["technique"])

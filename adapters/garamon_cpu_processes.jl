@@ -48,7 +48,8 @@ function cp28_generate(case,directory,rng)
 end
 
 function cp28_prepare(generated,case,directory)
-    Sys.free_memory()>=1<<30 || error("process preflight memory admission")
+    available=Int(Sys.free_memory())
+    available>=1<<30 || throw(GaramonBench.AvailableMemoryBudget(available,1<<30))
     project = dirname(Base.active_project())
     pids = addprocs(generated.workers;exeflags=`--startup-file=no --threads=1,0 --gcthreads=1 --project=$project`,
         env=["OPENBLAS_NUM_THREADS"=>"1","JULIA_NUM_THREADS"=>"1,0"])

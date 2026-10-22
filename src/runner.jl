@@ -29,6 +29,59 @@ end
 Base.showerror(io::IO,e::ControllerMemoryBudget)=print(io,
     "controller RSS budget: current resident bytes ",e.observed," exceed ",e.limit)
 
+struct AvailableMemoryBudget <: Exception
+    available::Int
+    required::Int
+end
+Base.showerror(io::IO,e::AvailableMemoryBudget)=print(io,
+    "host memory admission: available bytes ",e.available," below required ",e.required)
+
+# Inspect exception types, never error-message substrings. CUDA remains an
+# optional dependency: CPU workers must not load it to classify failures.
+function memory_failure_details(exception)
+    if exception isa ControllerMemoryBudget
+        return Dict{String,Any}("kind"=>"controller_rss",
+            "observed_rss_bytes"=>exception.observed,"limit_rss_bytes"=>exception.limit)
+    elseif exception isa AvailableMemoryBudget
+        return Dict{String,Any}("kind"=>"host_memory_admission",
+            "available_bytes"=>exception.available,"required_bytes"=>exception.required)
+    elseif exception isa OutOfMemoryError
+        return Dict{String,Any}("kind"=>"cpu_out_of_memory")
+    elseif exception isa LoadError || exception isa InitError
+        return memory_failure_details(exception.error)
+    elseif exception isa CapturedException
+        return memory_failure_details(exception.ex)
+    elseif exception isa CompositeException
+        details=memory_failure_details.(exception.exceptions)
+        return !isempty(details) && all(!isnothing,details) ? first(details) : nothing
+    elseif exception isa TaskFailedException
+        details=[memory_failure_details(entry.exception) for entry in current_exceptions(exception.task)]
+        return !isempty(details) && all(!isnothing,details) ? last(details) : nothing
+    elseif exception isa Base.ProcessFailedException
+        failed=filter(p->p.exitcode!=0 || p.termsignal!=0,exception.procs)
+        !isempty(failed) && all(p->p.termsignal!=0 && !(p.termsignal in (2,15)),failed) || return nothing
+        return Dict{String,Any}("kind"=>"worker_terminated","signal"=>first(failed).termsignal,
+            "memory_cause_confirmed"=>false)
+    end
+    kind=nameof(typeof(exception))
+    modules=Base.fullname(parentmodule(typeof(exception)))
+    cuda=any(in((:CUDA,:CUDACore,:CUDADriver)),modules)
+    if cuda && kind==:OutOfGPUMemoryError
+        return Dict{String,Any}("kind"=>"gpu_out_of_memory")
+    elseif cuda && kind==:CuError && hasproperty(exception,:code)
+        code=Int(getproperty(exception,:code))
+        code in (2,700,701) || return nothing
+        return Dict{String,Any}("kind"=>code==2 ? "gpu_out_of_memory" : "gpu_memory_error",
+            "cuda_error_code"=>code)
+    elseif kind==:RemoteException && :Distributed in modules && hasproperty(exception,:captured)
+        return memory_failure_details(exception.captured)
+    elseif kind==:ProcessExitedException && :Distributed in modules
+        return Dict{String,Any}("kind"=>"worker_terminated","signal"=>0,
+            "memory_cause_confirmed"=>false)
+    end
+    nothing
+end
+
 function controller_memory_guard(limits)
     limit=get(limits,"controller_rss_bytes",2<<30)
     observed=resident_rss_bytes()

@@ -136,8 +136,18 @@ end
 
 @testset "current RSS admission does not inherit historical peaks" begin
     if Sys.islinux()
+        adapter=BenchmarkAdapter(name="released_peak_fixture",
+            generate=(case,dir,rng)->Int64[1,2,3],execute=copy,
+            oracle=(state,result)->result==state,contract="owned exact fixture")
+        case=Dict{String,Any}("adapter"=>adapter.name,"seed"=>1)
+        # Compile both paths before choosing a ceiling from live RSS. JIT
+        # allocations after that snapshot would test a different memory load.
+        warm_limits=Dict("controller_rss_bytes"=>typemax(Int),"case_seconds"=>30)
+        GaramonBench.run_case_preflight(adapter,case,warm_limits)
+        GaramonBench.case_guard([(disk_checkpoint_bytes=0,)],time(),warm_limits)
+        GC.gc(true)
         live=GaramonBench.resident_rss_bytes()
-        peak=Sys.maxrss()
+        peak=Int(Sys.maxrss())
         @test live>0
         if peak-live>64<<20
             ceiling=(peak+live)÷2
@@ -145,10 +155,6 @@ end
             limits=Dict("controller_rss_bytes"=>ceiling,"case_seconds"=>30)
             @test GaramonBench.case_guard(
                 [(disk_checkpoint_bytes=0,)],time(),limits)===true
-            adapter=BenchmarkAdapter(name="released_peak_fixture",
-                generate=(case,dir,rng)->Int64[1,2,3],execute=copy,
-                oracle=(state,result)->result==state,contract="owned exact fixture")
-            case=Dict{String,Any}("adapter"=>adapter.name,"seed"=>1)
             @test GaramonBench.run_case_preflight(adapter,case,limits)["oracle_passed"]
         end
         @test_throws GaramonBench.ControllerMemoryBudget GaramonBench.controller_memory_guard(

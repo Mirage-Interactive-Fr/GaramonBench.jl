@@ -265,7 +265,9 @@ function run_technique_profiles(preflight,output;ids=String[])
                 result["archive"]=directory
             catch exception
                 exception isa InterruptException && rethrow()
-                result["status"]="failed"
+                memory=memory_failure_details(exception)
+                result["status"]=isnothing(memory) ? "failed" : "resource_unavailable"
+                isnothing(memory) || (result["resource_failure"]=memory)
                 result["reason"]=failure_message(exception)
             end
         end
@@ -353,7 +355,10 @@ function run_technique_bench(preflight,output;ids=String[],
                 result["archive"]=directory
             catch exception
                 exception isa InterruptException && rethrow()
-                result["status"]=exception isa MemoryBudgetRestart ? "restart_required" : "failed"
+                memory=memory_failure_details(exception)
+                result["status"]=exception isa MemoryBudgetRestart ? "restart_required" :
+                    isnothing(memory) ? "failed" : "resource_unavailable"
+                isnothing(memory) || (result["resource_failure"]=memory)
                 result["reason"]=failure_message(exception)
                 if exception isa MemoryBudgetRestart
                     result["budget_skipped_ids"]=resumable_status(config,directory)["budget_skipped_ids"]
@@ -383,6 +388,12 @@ function run_technique_bench(preflight,output;ids=String[],
                 exception isa InterruptException && rethrow()
                 result["article_status"]="failed"
                 result["article_failure"]=failure_message(exception)
+                memory=memory_failure_details(exception)
+                if !isnothing(memory)
+                    result["status"]="resource_unavailable"
+                    result["resource_failure"]=memory
+                    result["reason"]="Article resource failure; validated measurements retained: "*failure_message(exception)
+                end
             end
         end
         results[row["id"]]=result
@@ -454,7 +465,10 @@ function run_technique_smoke(output;ids=String[],allow_source_changes::Bool=fals
                 result["status"]="oracle_passed"
                 result["archive"]=directory
             catch exception
-                result["status"]="failed"
+                exception isa InterruptException && rethrow()
+                memory=memory_failure_details(exception)
+                result["status"]=isnothing(memory) ? "failed" : "resource_unavailable"
+                isnothing(memory) || (result["resource_failure"]=memory)
                 result["reason"]=failure_message(exception)
             end
         end

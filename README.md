@@ -65,7 +65,25 @@ an unfinished case is retried. Do not delete the archive. `--ids=17` limits
 a run to that technique; omit it to continue the full campaign. Ctrl-C retains
 validated work, and repeating the same command resumes it.
 
-### Memory-limited cases
+### Memory-limited cases and terminated workers
+
+To install updates and restart from zero, first stop the previous campaign.
+The following command **permanently deletes every entry inside this checkout's
+`data/` working directory**, including processed results and baseline caches,
+then launches the default campaign again:
+
+```sh
+cd "$HOME/.julia/dev/GaramonBench" &&
+git pull --ff-only &&
+julia --startup-file=no -e 'root=joinpath(homedir(),".julia","dev","GaramonBench","data"); islink(root) && error("Refusing a linked data directory"); mkpath(root); foreach(path -> rm(path; recursive=true), readdir(root; join=true))' &&
+julia scripts/bench.jl
+```
+
+The script activates and instantiates the pinned environment. To resume the
+new default campaign, rerun only `julia scripts/bench.jl`; do not repeat the
+deletion command. Add `--allow-source-changes` only when accepting a later
+code/dependency update for an existing archive. Published figures and PDFs
+outside `data/` are derived artifacts; they are not used as timing inputs.
 
 The technique campaign continues when a case exceeds its configured controller
 RSS budget. It records that case under `benchmark/<id>/budget-skips/` with the
@@ -74,7 +92,32 @@ exits and the controller starts a fresh process for the next pending case.
 Validated cases and shared baseline measurements remain available; incomplete
 samples are never published as measurements. No extra launch flag is needed.
 
-Resume after updating with the same command and archive path shown above.
+The same policy covers host-memory admission before local worker creation,
+Julia `OutOfMemoryError`, CUDA `OutOfGPUMemoryError`,
+and CUDA driver out-of-memory, illegal-address, and launch-resource errors.
+CUDA is optional; CPU workers do not import it for error classification.
+Each exclusion records its actual category. An illegal-address failure is
+reported as a GPU memory error, not as proof that VRAM capacity was exhausted.
+
+Before each case, an atomic `active-case.toml` journal identifies its full
+parameters, source revision, worker PID, and unique launch token. If the worker
+is killed (including SIGKILL), the surviving controller records the interrupted
+case and continues in a fresh worker. Completed evidence is verified and kept.
+A signal alone does not prove an OOM kill: the report explicitly says
+`memory_cause_confirmed = false`. Unrelated processes are never terminated;
+only the worker's private process group and processes carrying its exact unique
+launch token are cleaned up. This also covers detached local Julia workers.
+
+If termination happens before a case can be identified, or memory is unavailable
+during setup/preflight, the affected route/stage is reported as
+`resource_unavailable` and the other techniques continue. Its unmeasured cases
+remain unmeasured. A preflight resource failure prevents measurement of that
+route on this launch. Ctrl-C and SIGTERM retain their pause/interruption behavior.
+The controller must remain alive for automatic continuation; if the system kills
+the controller itself or reboots, rerun the same command to resume.
+
+To resume, repeat only the launch command with the same archive path; never
+repeat the data deletion command.
 Recorded memory exclusions are skipped on subsequent resumes. Progress reports
 use `complete_with_budget_skips` to distinguish a finished campaign with
 exclusions from a campaign in which every case produced validated measurements.
@@ -82,10 +125,23 @@ Each exclusion is an observation at a case boundary on this machine, not a
 claim that the mathematical strategy necessarily requires that much memory.
 For plots with measured cases, red crosses identify memory exclusions without
 assigning them a timing ratio; their parameters and reasons are exported in
-`budget_skips.csv`. A route with no validated measurements keeps its placeholder.
+`budget_skips.csv`, including CPU/GPU error category or termination signal.
+A route with no validated measurements keeps its placeholder. Route/stage
+resource failures and their child logs also appear in `launch-progress.toml`.
 Oracle failures, damaged archives, and other errors still stop the affected stage.
 The RSS guard is checked at stage boundaries; it is not a hard operating-system
 memory cap.
+
+At the end of each technique with qualified measurements, the script refreshes
+the per-case CSV exports, the corresponding article figure, and the compiled
+article PDF automatically (`update_article=true`). Techniques with excluded
+cases show their exclusions alongside measured cases. A technique with no
+qualified timings retains its placeholder. The methods manuscript is not
+rewritten with numerical commentary. LaTeX failures are reported separately in
+`article_status` / `article_failure`; raw validated measurements remain intact.
+Figure generation and LaTeX compilation are synchronous between measurements:
+the next case or technique starts only after that update returns. No article
+compiler is launched in the background while a benchmark kernel is being timed.
 
 On the dedicated machine, use Julia 1.13 and launch the controller with
 automatic threads:

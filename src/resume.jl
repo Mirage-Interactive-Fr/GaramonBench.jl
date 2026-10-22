@@ -419,7 +419,19 @@ struct MemoryBudgetRestart <: Exception
     caseid::String
 end
 Base.showerror(io::IO,e::MemoryBudgetRestart)=print(io,
-    "case ",e.caseid," skipped at the RSS budget; restart worker to continue")
+    "case ",e.caseid," excluded after a resource failure; restart worker to continue")
+
+function _record_resource_skip!(output,case,manifest,details,reason)
+    id=case_id(case)
+    mkpath(joinpath(output,"budget-skips"))
+    record=merge(Dict{String,Any}("status"=>"resource_failure","case_id"=>id,"case"=>case,
+        "run_signature"=>manifest["run_signature"],
+        "execution_signature"=>_resume_execution(manifest)["run_signature"],
+        "reason"=>reason,"recorded_utc"=>string(now(UTC))),details)
+    # Preserve the existing RSS record schema for previously published archives.
+    details["kind"]=="controller_rss" && (record["status"]="memory_budget_exceeded")
+    _resume_write(joinpath(output,"budget-skips",id*".toml"),record)
+end
 
 # Budget exclusions are separate from validated measurements. Never turn an
 # incomplete sample set into a completion marker or a numerical article result.
@@ -431,10 +443,13 @@ function _resume_budget_ids(output,cases,manifest)
         path=joinpath(output,"budget-skips",id*".toml")
         isfile(path) || continue
         record=TOML.parsefile(path)
-        record["status"]=="memory_budget_exceeded" && record["case_id"]==id &&
+        valid_resource=record["status"]=="memory_budget_exceeded" ?
+            record["observed_rss_bytes"]>record["limit_rss_bytes"] :
+            record["status"]=="resource_failure" && get(record,"kind","") in
+                ("host_memory_admission","cpu_out_of_memory","gpu_out_of_memory","gpu_memory_error","worker_terminated")
+        valid_resource && record["case_id"]==id &&
             record["case"]==case && record["run_signature"]==manifest["run_signature"] &&
-            record["execution_signature"] in accepted &&
-            record["observed_rss_bytes"]>record["limit_rss_bytes"] ||
+            record["execution_signature"] in accepted ||
             error("invalid memory budget exclusion: "*id)
         ispath(joinpath(output,"cases",id)) && error("case is both validated and budget-excluded: "*id)
         push!(skipped,id)
@@ -528,6 +543,10 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
                 end
                 mkpath(stage)
                 _resume_write(joinpath(stage,"case.toml"),case)
+                _resume_write(joinpath(output,"active-case.toml"),Dict(
+                    "case_id"=>id,"case"=>case,"worker_pid"=>getpid(),
+                    "worker_token"=>get(ENV,"GARAMONBENCH_WORKER_TOKEN",""),
+                    "run_signature"=>signature,"execution_signature"=>execution["run_signature"]))
                 rows,verdict=try
                     if backend=="oracle_preflight"
                         NamedTuple[],run_case_preflight(ADAPTERS[case["adapter"]],case,limits)
@@ -539,13 +558,9 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
                             artifact_dir=stage)
                     end
                 catch exception
-                    if skip_memory_budget && exception isa ControllerMemoryBudget
-                        mkpath(joinpath(output,"budget-skips"))
-                        _resume_write(joinpath(output,"budget-skips",id*".toml"),Dict(
-                            "status"=>"memory_budget_exceeded","case_id"=>id,"case"=>case,
-                            "run_signature"=>signature,"execution_signature"=>execution["run_signature"],
-                            "observed_rss_bytes"=>exception.observed,"limit_rss_bytes"=>exception.limit,
-                            "reason"=>failure_message(exception),"recorded_utc"=>string(now(UTC))))
+                    details=memory_failure_details(exception)
+                    if skip_memory_budget && !isnothing(details)
+                        _record_resource_skip!(output,case,manifest,details,failure_message(exception))
                         push!(skipped,id)
                         println(stderr,"Case ",id,": skipped (memory budget); validated cases retained")
                         throw(MemoryBudgetRestart(id))
@@ -573,6 +588,7 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
                 tree_bytes(output)<=get(limits,"archive_bytes",256<<20) ||
                     error("resumable archive budget")
                 mv(stage,joinpath(output,"cases",id))
+                rm(joinpath(output,"active-case.toml");force=true)
                 push!(completed,id)
                 _resume_write(joinpath(output,"progress.toml"),
                     Dict("status"=>"running","completed_ids"=>completed,
