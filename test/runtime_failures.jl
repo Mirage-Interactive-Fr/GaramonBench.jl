@@ -284,10 +284,38 @@ end
         @test isnothing(GaramonBench._check_native_stage_report(report,["17"],"benchmark"))
         records[1]["validated_cases"]=1
         GaramonBench.write_toml(report,Dict("technique"=>records))
-        @test_throws ErrorException GaramonBench._check_native_stage_report(report,["17"],"benchmark")
+        @test_logs (:warn,r"article update is pending") GaramonBench._check_native_stage_report(report,["17"],"benchmark")
         records[1]["article_status"]="updated"
         GaramonBench.write_toml(report,Dict("technique"=>records))
         @test isnothing(GaramonBench._check_native_stage_report(report,["17"],"benchmark"))
+    end
+end
+
+@testset "PDF failures do not block validated benchmark stages" begin
+    terminal=IOBuffer()
+    fail_refresh=(args...;kwargs...)->error("LaTeX compilation failed")
+    @test_logs (:warn,r"continuing the benchmark campaign") begin
+        @test isnothing(GaramonBench._refresh_article_before_resume("fixture";
+            refresh=fail_refresh,terminal))
+    end
+    @test_throws InterruptException GaramonBench._refresh_article_before_resume(
+        "fixture";refresh=(args...;kwargs...)->throw(InterruptException()),terminal)
+    record=Dict{String,Any}("id"=>"13","status"=>"complete","validated_cases"=>504)
+    @test_logs (:warn,r"measurements remain complete") GaramonBench._record_article_failure!(
+        record,OutOfMemoryError())
+    @test record["status"]=="complete" && record["validated_cases"]==504
+    @test record["article_status"]=="failed"
+    @test haskey(record,"article_resource_failure") && !haskey(record,"resource_failure")
+    mktempdir() do directory
+        report=joinpath(directory,"bench-progress.toml")
+        GaramonBench.write_toml(report,Dict("technique"=>[record]))
+        @test_logs (:warn,r"article update is pending") GaramonBench._check_native_stage_report(
+            report,["13"],"benchmark")
+        record["status"]="failed"
+        record["reason"]="oracle mismatch"
+        GaramonBench.write_toml(report,Dict("technique"=>[record]))
+        @test_throws ErrorException GaramonBench._check_native_stage_report(
+            report,["13"],"benchmark")
     end
 end
 

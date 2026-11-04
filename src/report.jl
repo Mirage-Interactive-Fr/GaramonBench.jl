@@ -384,32 +384,161 @@ function _technique_csv_records(path)
     end for line in lines[2:end]]
 end
 
-"""Regenerate a retained plot from its own checksum-verified measurement
-summary. Never replace it with another campaign or infer numbers from a PDF.
+function _technique_archive_config(archive)
+    path=joinpath(archive,"configuration.toml")
+    isfile(path) || error("Archived benchmark configuration is missing: "*path)
+    config=TOML.parsefile(path)
+    manifest=TOML.parsefile(joinpath(archive,"campaign.toml"))
+    case_id.(expand_cases(config))==manifest["case_ids"] ||
+        error("Archived benchmark configuration differs from its case identities: "*archive)
+    config
+end
+
+"""Locate old reports and raw campaigns, without traversing source snapshots,
+case payloads, environments, or staging directories.
 """
-function _refresh_retained_technique_figure(row,processed_root,figure_root)
+function _article_recovery_index(output,processed_root,benchmark_root)
+    reports=Dict{String,Vector{String}}()
+    archives=Dict{String,Vector{String}}()
+    visited=Set{String}()
+    excluded=Set([".git","sources","revisions","environment","environments",
+        "cases","staging","_baselines","preflight","profiles","compiled","build"])
+    roots=abspath.([processed_root,output,joinpath(benchmark_root,"data"),
+        joinpath(benchmark_root,"gpu","data")])
+    parent=dirname(abspath(output))
+    basename(parent) in ("garamonbench","output-fallback") && push!(roots,parent)
+    unique!(roots)
+    for search_root in roots
+        isdir(search_root) || continue
+        for (directory,subdirs,files) in walkdir(realpath(search_root);
+                onerror=exception->(@warn "Unreadable directory skipped during article recovery" exception))
+            if directory in visited
+                empty!(subdirs)
+                continue
+            end
+            push!(visited,directory)
+            filter!(name->!(name in excluded) &&
+                !islink(joinpath(directory,name)),subdirs)
+            if "provenance.toml" in files
+                path=joinpath(directory,"provenance.toml")
+                provenance=TOML.parsefile(path)
+                id=get(provenance,"technique","")
+                isempty(id) || push!(get!(reports,id,String[]),path)
+            end
+            if "campaign.toml" in files && "configuration.toml" in files
+                push!(get!(archives,basename(directory),String[]),directory)
+                empty!(subdirs)
+            end
+        end
+    end
+    (;reports,archives,roots)
+end
+
+function _recover_raw_technique_figure(row,archive_paths,processed_root,figure_root)
+    candidates=NamedTuple[]
+    for archive in archive_paths
+        config=_technique_archive_config(archive)
+        get(config["campaign"],"backend","")=="benchmarktools" &&
+            config["campaign"]["condition"]=="isolated" || continue
+        # Each technique has a particular adapter, strategy, and operation.
+        # Do not substitute another benchmark family with the same directory name.
+        cases=expand_cases(config)
+        expected=row["case"]
+        all(case->all(get(case,key,nothing)==expected[key]
+            for key in ("adapter","strategy","operation") if haskey(expected,key)),cases) ||
+            continue
+        manifest=TOML.parsefile(joinpath(archive,"campaign.toml"))
+        archived_machine=get(get(manifest,"machine",Dict()),"machine_id_sha256",nothing)
+        if !isnothing(archived_machine) &&
+                archived_machine!=_resume_machine()["machine_id_sha256"]
+            continue
+        end
+        rows,parameters=_technique_report_rows(row,config,archive)
+        isempty(rows) && continue
+        timings=Dict(r.case_id=>(r.median_ns,r.baseline_median_ns) for r in rows)
+        push!(candidates,(;archive,config,timings,parameters,planned_ids=case_id.(cases)))
+    end
+    isempty(candidates) && return nothing
+    reference=first(candidates)
+    all(c->c.timings==reference.timings && c.parameters==reference.parameters &&
+        c.planned_ids==reference.planned_ids,candidates) ||
+        error("Several different archived measurement sets exist for technique "*row["id"]*
+            "; no set was chosen automatically: "*join(getproperty.(candidates,:archive),", "))
+    println("Technique ",row["id"],": rebuilding from archived cases in ",reference.archive)
+    _refresh_technique_benchmark_article(row,reference.config,reference.archive;
+        processed_root,figure_root,compile_article=false)
+end
+
+"""Regenerate a retained plot from checksum-verified measurement data.
+The old PDF hash identifies a preferred report, but a unique verified report
+or raw campaign can recover a plot even when that derived PDF has changed.
+"""
+function _refresh_retained_technique_figure(row,processed_root,figure_root;
+        report_paths=nothing,archive_paths=String[],searched_roots=String[])
     figure=joinpath(figure_root,"plot_technique_"*row["id"]*".pdf")
     isfile(figure) || return nothing
     digest=_resume_sha(figure)
     directory=joinpath(processed_root,row["id"])
     candidates=Pair{String,Any}[]
-    if isdir(directory)
+    paths=isnothing(report_paths) ? String[] : copy(report_paths)
+    if isnothing(report_paths) && isdir(directory)
         for (root,_,files) in walkdir(directory)
             "provenance.toml" in files || continue
-            path=joinpath(root,"provenance.toml")
-            provenance=TOML.parsefile(path)
-            get(provenance,"technique","")==row["id"] &&
-                get(provenance,"figure_sha256","")==digest &&
-                push!(candidates,path=>provenance)
+            push!(paths,joinpath(root,"provenance.toml"))
         end
     end
-    isempty(candidates) && error("Technique "*row["id"]*
-        ": a retained figure has no matching validated report in "*directory*
-        ". Rebuild stopped; existing data and figure were kept.")
-    identities=unique((p.second["summary_sha256"],p.second["parameters_sha256"],
-        p.second["total_cases"]) for p in candidates)
-    length(identities)==1 || error("Ambiguous measurement provenance for technique "*row["id"])
+    for path in unique(paths)
+        provenance=TOML.parsefile(path)
+        get(provenance,"technique","")==row["id"] &&
+            get(provenance,"qualification","")==
+                "isolated_completed_cases_oracle_and_baseline_passed" ||
+            continue
+        push!(candidates,path=>provenance)
+    end
+    exact=filter(p->get(p.second,"figure_sha256","")==digest,candidates)
+    if !isempty(exact)
+        candidates=exact
+    else
+        # A PDF is derived output, not the source of the measured numbers.
+        # Accept a unique report only after checking its actual data hashes.
+        filter!(candidates) do pair
+            path,provenance=pair
+            all(isfile(joinpath(dirname(path),file)) &&
+                _resume_sha(joinpath(dirname(path),file))==get(provenance,key,"")
+                for (file,key) in (("summary.csv","summary_sha256"),
+                    ("case_parameters.toml","parameters_sha256")))
+        end
+    end
+    if isempty(candidates)
+        recovered=_recover_raw_technique_figure(row,archive_paths,processed_root,figure_root)
+        isnothing(recovered) || return recovered
+        error("Technique "*row["id"]*
+            ": no verified measurement report or compatible raw campaign was found. "*
+            "Search roots: "*join(searched_roots,", ")*"; reports: "*join(paths,", ")*"; raw archives: "*
+            join(archive_paths,", ")*". No experiment was run and existing files were kept.")
+    end
+    # Report schemas have gained columns over time. Compare the recorded
+    # measurements and parameters, rather than treating a CSV layout change
+    # as a different measurement set.
+    identities=[begin
+        path,provenance=pair
+        parent=dirname(path)
+        for (file,key) in (("summary.csv","summary_sha256"),
+                ("case_parameters.toml","parameters_sha256"))
+            _resume_sha(joinpath(parent,file))==provenance[key] ||
+                error("retained report data changed: "*joinpath(parent,file))
+        end
+        timings=Dict(record["case_id"]=>(parse(Float64,record["median_ns"]),
+            parse(Float64,record["baseline_median_ns"]))
+            for record in _technique_csv_records(joinpath(parent,"summary.csv")))
+        (;timings,parameters=TOML.parsefile(joinpath(parent,"case_parameters.toml")),
+            total=provenance["total_cases"])
+    end for pair in candidates]
+    all(==(first(identities)),identities) ||
+        error("Ambiguous measurement provenance for technique "*row["id"]*
+            ": "*join(first.(candidates),", "))
     provenance_path,provenance=first(sort!(candidates;by=first))
+    println("Technique ",row["id"],": rebuilding from verified report ",provenance_path)
     provenance["qualification"]=="isolated_completed_cases_oracle_and_baseline_passed" ||
         error("unqualified retained report for technique "*row["id"])
     summary=joinpath(dirname(provenance_path),"summary.csv")
@@ -476,21 +605,29 @@ function refresh_technique_article(output;ids=String[],
     isempty(requested) || issubset(requested,Set(row["id"] for row in rows)) ||
         error("unknown technique ID")
     selected=isempty(requested) ? rows : filter(row->row["id"] in requested,rows)
+    recovery=_article_recovery_index(output,processed_root,root)
     refreshed=NamedTuple[]
     for row in selected
         archive=joinpath(abspath(output),"benchmark",row["id"])
         isfile(joinpath(archive,"campaign.toml")) || continue
-        config=technique_bench_config(row;benchmark_root=root)
+        config=_technique_archive_config(archive)
         result=_refresh_technique_benchmark_article(row,config,archive;
             processed_root,figure_root,compile_article=false)
-        isnothing(result) || push!(refreshed,(;id=row["id"],result...))
+        if !isnothing(result)
+            println("Technique ",row["id"],": rebuilt ",result.completed_cases,
+                " archived cases from ",archive)
+            push!(refreshed,(;id=row["id"],result...))
+        end
     end
     updated=Set(result.id for result in refreshed)
     # Figures can outlive the campaign that generated them. LaTeX must never
     # silently include such a file without regenerating its plot and caption.
     for row in rows
         row["id"] in updated && continue
-        result=_refresh_retained_technique_figure(row,processed_root,figure_root)
+        result=_refresh_retained_technique_figure(row,processed_root,figure_root;
+            report_paths=get(recovery.reports,row["id"],String[]),
+            archive_paths=get(recovery.archives,row["id"],String[]),
+            searched_roots=recovery.roots)
         isnothing(result) || push!(refreshed,(;id=row["id"],result...))
     end
     source=joinpath(root,"papers","Garamon_research_article_2026-09-27_en.tex")

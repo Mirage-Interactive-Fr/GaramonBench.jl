@@ -280,6 +280,15 @@ function run_technique_profiles(preflight,output;ids=String[])
     report
 end
 
+function _record_article_failure!(result,exception)
+    result["article_status"]="failed"
+    result["article_failure"]=failure_message(exception)
+    memory=memory_failure_details(exception)
+    isnothing(memory) || (result["article_resource_failure"]=memory)
+    @warn "Article update failed; validated benchmark measurements remain complete" id=get(result,"id","") reason=result["article_failure"]
+    result
+end
+
 """Run selected native benchmark grids after one exact smoke case per route.
 Each technique has an independently resumable DrWatson archive. This function
 does not invoke PerfChecker and never reuses another machine's timing data.
@@ -386,14 +395,7 @@ function run_technique_bench(preflight,output;ids=String[],
                 end
             catch exception
                 exception isa InterruptException && rethrow()
-                result["article_status"]="failed"
-                result["article_failure"]=failure_message(exception)
-                memory=memory_failure_details(exception)
-                if !isnothing(memory)
-                    result["status"]="resource_unavailable"
-                    result["resource_failure"]=memory
-                    result["reason"]="Article resource failure; validated measurements retained: "*failure_message(exception)
-                end
+                _record_article_failure!(result,exception)
             end
         end
         results[row["id"]]=result

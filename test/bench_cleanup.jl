@@ -122,14 +122,17 @@ end
     mktempdir() do root
         archive=joinpath(root,"benchmark","28")
         mkpath(archive)
-        config=Dict{String,Any}("campaign"=>Dict("condition"=>"isolated","seed"=>17),
+        config=Dict{String,Any}("campaign"=>Dict("condition"=>"isolated","seed"=>17,
+                "backend"=>"benchmarktools"),
             "grid"=>Dict("dimension"=>[2,3,4],"strategy"=>["fixture"]),
             "case_defaults"=>Dict("adapter"=>"fixture","baseline_required"=>true),
             "limits"=>Dict("samples"=>2,"max_cases"=>3))
         signature=repeat("a",64)
-        GaramonBench._resume_write(joinpath(archive,"campaign.toml"),Dict(
-            "condition"=>"isolated","status"=>"running","run_signature"=>signature))
         cases=expand_cases(config)
+        GaramonBench._resume_write(joinpath(archive,"campaign.toml"),Dict(
+            "condition"=>"isolated","status"=>"running","run_signature"=>signature,
+            "case_ids"=>case_id.(cases)))
+        GaramonBench._resume_write(joinpath(archive,"configuration.toml"),config)
         cache_path=joinpath(root,"benchmark","_baselines",repeat("b",64)*".toml")
         mkpath(dirname(cache_path))
         GaramonBench._resume_write(cache_path,Dict("time_ns"=>[2.0,2.0]))
@@ -176,6 +179,23 @@ end
         provenance=TOML.parsefile(joinpath(dirname(report.summary_csv),"provenance.toml"))
         @test provenance["total_cases"]==3 && provenance["completed_cases"]==2
         @test provenance["campaign_status"]=="running"
+        # The current registry has a different grid for technique 28. An
+        # output-only rebuild must use the grid recorded with these samples.
+        from_raw=refresh_technique_article(root;ids=["28"],
+            processed_root=joinpath(root,"raw-recovery"),
+            figure_root=joinpath(root,"raw-plots"),paper_root=joinpath(root,"raw-paper"),
+            publish_canonical=false)
+        @test getproperty.(from_raw.figures,:completed_cases)==[2]
+        recovered_config=GaramonBench._technique_archive_config(archive)
+        @test recovered_config==config
+        discovery=GaramonBench._article_recovery_index(joinpath(root,"another-campaign"),
+            root,root)
+        @test archive in discovery.archives["28"]
+        raw_row=merge(row,Dict("case"=>Dict("adapter"=>"fixture","strategy"=>"fixture")))
+        recovered=GaramonBench._recover_raw_technique_figure(raw_row,
+            discovery.archives["28"],joinpath(root,"old-raw-reports"),
+            joinpath(root,"old-raw-plots"))
+        @test recovered.completed_cases==2
         # A retained plot can belong to a previous campaign. Its archived
         # paired measurements must be reused even when the current campaign
         # has no cases for that technique.
@@ -183,11 +203,16 @@ end
         parameters_file=joinpath(dirname(report.summary_csv),"case_parameters.toml")
         original_parameters=read(parameters_file)
         write(report.figure_pdf,"legacy plot to regenerate")
-        provenance["figure_sha256"]=GaramonBench._resume_sha(report.figure_pdf)
-        GaramonBench._resume_write(joinpath(dirname(report.summary_csv),"provenance.toml"),provenance)
+        # The derived PDF's hash no longer matches. A unique intact data
+        # report remains sufficient, including when stored in an old layout.
+        legacy=joinpath(root,"gpu","data","processed","old-layout","28")
+        mkpath(legacy)
+        for file in ("summary.csv","case_parameters.toml","provenance.toml")
+            cp(joinpath(dirname(report.summary_csv),file),joinpath(legacy,file))
+        end
         rm(caption_path)
         rebuilt=refresh_technique_article(joinpath(root,"other-campaign");
-            ids=["16"],processed_root=joinpath(root,"processed"),
+            ids=["16"],processed_root=root,
             figure_root=joinpath(root,"plots"),paper_root=joinpath(root,"paper"),
             publish_canonical=false)
         @test getproperty.(rebuilt.figures,:id)==["28"]

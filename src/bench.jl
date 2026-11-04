@@ -372,8 +372,7 @@ function _check_native_stage_report(report,ids,phase)
         elseif phase=="benchmark" && !(get(record,"article_status","")=="updated" ||
                 record["status"]=="complete_with_budget_skips" &&
                 get(record,"validated_cases",-1)==0 && get(record,"article_status","")=="budget_skipped_no_measurements")
-            push!(problems,"Technique "*id*": validated benchmark retained; article: "*
-                get(record,"article_failure","no successful update recorded"))
+            @warn "Validated benchmark is complete; article update is pending" id reason=get(record,"article_failure","no successful update recorded")
         end
     end
     isempty(problems) || error("Native stage incomplete:\n"*join(problems,"\n")*
@@ -574,6 +573,21 @@ function _run_native_stage_resumable(command,output,phase,id;on_restart=nothing,
     end
 end
 
+function _refresh_article_before_resume(output;ids=String[],
+        refresh=refresh_technique_article,terminal=stdout)
+    println(terminal,"Rebuilding article from archived cases before resuming measurements.")
+    result=try
+        refresh(output;ids)
+    catch exception
+        exception isa InterruptException && rethrow()
+        @warn "Article rebuild failed; continuing the benchmark campaign" output reason=failure_message(exception)
+        return nothing
+    end
+    println(terminal,"Article rebuilt: ",result.article_pdf,
+        " (",length(result.figures)," measured figure(s))")
+    result
+end
+
 """Run reproducible native groups sequentially, with automatic environment and
 thread selection. Ctrl-C retains validated cases; repeat the same output path
 to resume. `phase=:preflight` performs no timings; `:profiles` adds bounded
@@ -596,10 +610,7 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
         end
         if phase==:benchmark &&
                 isdir(joinpath(destination,"benchmark"))
-            println("Rebuilding article from validated archived cases before resuming measurements.")
-            refreshed=refresh_technique_article(destination;ids)
-            println("Article rebuilt: ",refreshed.article_pdf,
-                " (",length(refreshed.figures)," measured figure(s))")
+            _refresh_article_before_resume(destination;ids)
         end
         gpu_status=gpu==:off ? "disabled" : "not_requested"
         if any(g->g.environment=="gpu",groups)
