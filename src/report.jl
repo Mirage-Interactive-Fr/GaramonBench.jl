@@ -66,8 +66,10 @@ function _technique_report_rows(row,config,archive)
             operation=string(get(case,"operation","")),
             trace=string(get(case,"trace","")),
             scenario=string(get(case,"scenario","")),
+            structure=string(get(case,"structure","")),
             signature=string(get(case,"signature","")),
             horizon=string(get(case,"horizon","")),
+            request_index=string(get(case,"request_index","")),
             capacity_plans=string(get(case,"capacity_plans","")),
             eviction_exponent=string(get(case,"eviction_exponent","")),
             frequency_slots=string(get(case,"frequency_slots","")),
@@ -83,7 +85,7 @@ function _technique_report_rows(row,config,archive)
 end
 
 const _TECHNIQUE_PLOT_AXES=("strategy","support","grade_pair","trace",
-    "scenario","horizon","operation","signature","family","capacity_plans",
+    "scenario","structure","horizon","request_index","operation","signature","family","capacity_plans",
     "eviction_exponent","frequency_slots","draw_seed")
 
 const _TECHNIQUE_AXIS_MEANING=Dict(
@@ -92,7 +94,9 @@ const _TECHNIQUE_AXIS_MEANING=Dict(
     "grade_pair"=>"grades of the two operands",
     "trace"=>"order of cache-context requests",
     "scenario"=>"workload sequence",
+    "structure"=>"whether expression nodes are shared or distinct",
     "horizon"=>"number of requests in the episode",
+    "request_index"=>"starting context in the catalogue request sequence",
     "operation"=>"requested product operation",
     "signature"=>"sign and degeneracy pattern of the metric",
     "family"=>"workload family",
@@ -106,6 +110,12 @@ _technique_axis_meaning(key)=isempty(key) ? "no varying category" :
 
 function _technique_caption_text(rows,parameters,total)
     color_key,marker_key=_technique_plot_axes(rows,parameters)
+    cases=[parameters[r.case_id] for r in rows]
+    unencoded=[key*"="*join(sort!(unique(string(get(case,key,"")) for case in cases);
+        by=value->(isnothing(tryparse(Float64,value)),
+            something(tryparse(Float64,value),0.0),value)),"/")
+        for key in _TECHNIQUE_PLOT_AXES if key!=color_key && key!=marker_key &&
+        length(unique(string(get(case,key,"")) for case in cases))>1]
     coverage=string(length(rows))*" of "*string(total)
     grouping=isempty(color_key) ?
         "The completed cases have no varying color category. " :
@@ -113,11 +123,13 @@ function _technique_caption_text(rows,parameters,total)
     grouping*=isempty(marker_key) ?
         "No second category is encoded by marker shape. " :
         "Marker shape distinguishes "*_technique_axis_meaning(marker_key)*". "
-    "The horizontal axis is algebra dimension; "*coverage*
+    caption="The horizontal axis is algebra dimension; "*coverage*
     " planned cases have qualified timing data. Each timed point is this route's "*
     "median warm time divided by standard Garamon.jl's median warm time "*
     "on the same input; a ratio below one means a faster warm execution. "*grouping*
+    (isempty(unencoded) ? "" : "Other parameters varying among the completed cases but not encoded by color or marker are "*join(unencoded,", ")*"; points may overlap. ")*
     "Preparation, memory, and complete-episode costs are not shown in this panel."
+    replace(caption,"_"=>"\\_")
 end
 
 function _technique_plot_axes(rows,parameters)

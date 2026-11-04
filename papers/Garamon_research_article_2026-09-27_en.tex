@@ -16,6 +16,13 @@
 \newcommand{\Cl}{\mathrm{Cl}}
 \newcommand{\supp}{\operatorname{supp}}
 \newcommand{\code}[1]{\texttt{#1}}
+% Every panel links back to the passage which defines its actual comparison.
+\newcommand{\techniqueintro}[1]{\phantomsection\label{explain:technique-#1}\ref{fig:technique-#1}}
+\newcommand{\techniqueguide}[2]{%
+\par\medskip\noindent\phantomsection\label{explain:technique-#1}%
+\textbf{Figure~\ref{fig:technique-#1}: #2.}\enspace}
+\newcommand{\techniquebacklink}[1]{%
+\hyperref[explain:technique-#1]{Explanation on p.~\pageref*{explain:technique-#1}}.}
 \newcommand{\pendingfigure}[4]{%
 \begin{figure}[!thp]
 \centering
@@ -39,16 +46,17 @@
 \IfFileExists{plot_technique_#1.pdf}{%
 \IfFileExists{plot_technique_#1_caption.tex}{%
 \caption[#2]{\textbf{#2.} \input{plot_technique_#1_caption.tex}
-\textit{Broader comparison planned: #3}}}{%
+\techniquebacklink{#1} \textit{Further measurements proposed: #3}}}{%
 \caption[#2]{\textbf{#2.} The current panel reports the qualified warm-time
 ratio to standard Garamon.jl on the same input. The legend identifies the
 measured scenario categories; preparation, memory, and full-episode costs
-are separate measurements.}}}{%
+are separate measurements. \techniquebacklink{#1}}}}{%
 \IfFileExists{preflight_technique_#1.pdf}{%
 \caption[#2]{\textbf{#2.} The displayed card verifies one oracle case;
-it reports no performance measurement. Planned comparison: #3}}{%
+it reports no performance measurement. \techniquebacklink{#1}
+Planned comparison: #3}}{%
 \caption[#2]{\textbf{#2.} No qualified measurement is available yet.
-Planned comparison: #3}}}
+\techniquebacklink{#1} Planned comparison: #3}}}
 \label{fig:technique-#1}
 \end{figure}}
 \title{Toward Workload-Aware Geometric Algebra in Garamon.jl:\\
@@ -360,6 +368,39 @@ stopping decision does not exclude the route at other dimensions, reuse
 horizons, output contracts, or devices.
 
 \section{Representation, indexing, and locality}
+\paragraph{How to read a measured panel.}
+The horizontal coordinate is the number of basis directions \(n\), not
+the number of nonzero coefficients. A point is one completed parameter
+combination, checked against an independent exact oracle before timing.
+Its vertical coordinate is the median warm execution time of the named
+route divided by the median warm time of its own same-input standard
+Garamon.jl route. One is equal time (black line); below one favors the
+named route for that warm call; the red dotted line at ten marks the
+campaign's local slow-route review threshold, not an error bound or a
+second library. A triangle at ten means the measured ratio exceeded
+the visible scale; a red cross denotes a resource exclusion with no
+timing result.
+Color and marker shape encode only the categories explicitly named in
+each caption. Different parameter combinations can share a color and
+even the same plotted position; they are not averaged into a new
+algorithm. ``Horizon'' \(H=1\) means one product request in an episode;
+\(H=32\) means 32 successive requests in the specified workload
+sequence, usually with fresh coefficients. A warm ratio alone does not
+charge one-time plan construction, retained memory, compilation, or the complete
+episode. The metric label \emph{positive} means all diagonal basis
+squares are positive; \emph{mixed} alternates positive and negative
+squares; \emph{degenerate} also sets every third diagonal square to
+zero. This is the metric's sign pattern, not a sign imposed on the
+random input coefficients. Separately, reversing the order of two
+basis directions contributes a minus sign to a blade product; repeated
+directions contribute their metric diagonal value and can make a term
+zero in a degenerate metric. Thus the sign of an output coefficient
+combines blade-order parity, metric factors, and input values. The
+dimensions 64/65 and 128/129 deliberately cross blade-mask storage
+boundaries where the implementation changes integer representation;
+they are not separate algorithms. The following guides repeat these facts
+where each comparison needs them; the page link in every caption
+returns here or to its technique-specific guide.
 \subsection{Dense, sparse, and grade-block forms}
 A dense multivector stores an addressable coefficient for each blade
 in its admitted algebra. Its simple indexing can be attractive when
@@ -378,12 +419,59 @@ The three representation slots test dense storage
 (Figure~\ref{fig:technique-01}), sparse supports
 (Figure~\ref{fig:technique-02}), and grade blocks
 (Figure~\ref{fig:technique-03}) against their respective same-input
-standard routes. Their legends identify the input structure actually
-varied in the qualified cases.
+standard routes. The first and third panels vary input structure;
+the second is a direct-route reference check, as explained below.
 
-\techniqueplot{01}{Dense multivectors}{Complete-product time, allocation, and peak memory by dimension and occupancy.}
-\techniqueplot{02}{Sparse supports}{The same seeded products in sparse storage, including lookup and conversion costs.}
-\techniqueplot{03}{Grade blocks}{Input grade pair, occupancy, operation, block preparation, and owned output.}
+\techniqueguide{01}{dense versus sparse storage on the same complete product}
+The candidate stores every coefficient slot of each operand and result;
+the same-input baseline stores only occupied blades in sparse form.
+Both return a separately owned matrix of all \(2^n\) output
+coefficients. The \emph{basis} input support contains the scalar, each
+individual basis vector, and the full-grade blade; \emph{broad} selects
+up to 64 distinct blade masks across all grades. These words describe
+which input coefficients are nonzero, not two algebra products. The
+grid uses \(n=2,\ldots,12\), \(H=1\) or \(32\), and positive, mixed, or
+degenerate diagonal metrics. The support choice determines color and
+horizon determines marker shape when both are represented in the
+qualified subset; metric signature is a further case variation even
+when its points share colors. The question is whether direct dense
+indexing outweighs its full \(2^n\) storage at each support pattern.
+The displayed ratio is only warm execution; conversion, memory, and
+full-episode cost require separate evidence.
+\techniqueplot{01}{Dense storage versus sparse storage}{Conversion, allocation, retained bytes, and complete-episode cost for the same outputs.}
+
+\techniqueguide{02}{sparse vector-product reference check}
+Both candidate and baseline here use sparse vector operands with the
+same \(n\) active grade-one blades; the candidate calls the ordinary
+product operator and the baseline calls the direct geometric-product
+function. These are two entry points to the standard Garamon.jl route,
+not a test of sparse against dense storage or of different support
+patterns. Both write all structurally possible output coefficients to
+an owned matrix. The grid uses \(n=2,\ldots,8,16,32,64,65,96,128\),
+\(H=1\) or \(32\), and the three metric signatures. Color and marker
+shape distinguish horizon and signature in a sufficiently complete
+panel. A ratio near one is the expected consistency check; a strong
+departure would need investigation before using this panel as a
+performance claim. It cannot establish a sparse-storage advantage.
+\techniqueplot{02}{Sparse vector reference check}{A separate sparse-versus-dense experiment with matched supports and conversion costs.}
+
+\techniqueguide{03}{prepared grade-block wedge versus direct wedge}
+Both routes compute the exterior (wedge) product, so repeated basis
+directions vanish independently of the metric. The candidate prepares
+a plan for the two input grades; the baseline executes the direct
+wedge on the same sparse homogeneous operands. The \emph{one\_one}
+case pairs a grade-one vector with another grade-one vector;
+\emph{top\_one} pairs a grade-\(n-1\) operand with a vector. These are
+different input shapes, not different operators. The candidate and
+baseline both return an owned matrix of all structurally possible
+output coefficients. The grid uses
+\(n=2,\ldots,8,16,32,64,65,96,128,129\), \(H=1\) or \(32\), and all
+three metric signatures. Color identifies grade pair and shape
+identifies horizon when represented; signature may be hidden by
+overlapping points. The current comparison does not vary wedge versus
+geometric versus contraction: operation is fixed to wedge. Warm time
+also leaves the one-time grade-plan preparation outside this panel.
+\techniqueplot{03}{Prepared grade-block wedge}{Other product operations, plan preparation, memory, and complete-episode cost.}
 
 Masks may fit a fixed machine integer, a wider fixed integer, or
 arbitrary precision storage. The mathematical blade is unchanged,
@@ -393,7 +481,7 @@ representation boundaries and compare identical supports; changing
 the corpus at a boundary would confound the effect of the mask type.
 A combinatorial rank is useful for a fixed grade only if the
 indexing table or arithmetic saves more than it costs.
-Figure~\ref{fig:technique-30} is the indexing experiment across
+Figure~\techniqueintro{30} is the indexing experiment across
 machine-word and wider-mask boundaries; its validation card alone
 cannot establish a lookup speedup.
 
@@ -415,7 +503,7 @@ coefficient signs. Every grade-two coefficient is requested. Its oracle
 uses coordinate reflections and minors; the ordinary-product baseline
 expands the blade and performs the complete ordered sandwich. Intermediate
 grades have an explicit expansion budget and are never discarded.
-Figures~\ref{fig:technique-17} and \ref{fig:technique-18} locate the
+Figures~\techniqueintro{17} and \techniqueintro{18} locate the
 factored-versor and certified active-subspace experiments. They ask
 whether saved expansion or ambient work repays certification and
 conversion over the specified request sequence.
@@ -443,9 +531,9 @@ materialized-trie wedge uses the same complete reachable-output principle,
 with a 64-dimensional bound from its unsigned machine-word masks. Reuse
 horizons and input signs vary independently of ambient dimension.
 The exact tensor-train, weighted-diagram, materialized-trie, and
-adaptive-radix experiments occupy Figures~\ref{fig:technique-19},
-\ref{fig:technique-20}, \ref{fig:technique-21}, and
-\ref{fig:technique-43}. Each needs its own preparation and output
+adaptive-radix experiments occupy Figures~\techniqueintro{19},
+\techniqueintro{20}, \techniqueintro{21}, and
+\techniqueintro{43}. Each needs its own preparation and output
 expansion costs before a warm-time point can support an episode claim.
 
 \techniqueplot{19}{Exact tensor train}{Certified rank, contraction, reconstruction, and peak memory.}
@@ -480,7 +568,7 @@ claim does not extend to arbitrary floating inputs or signatures.
 Conversion, matrix multiplication, inverse conversion, retained
 matrix bytes, and the baseline's output conversion are recorded.
 The figure remains provisional until isolated measurements qualify.
-Figure~\ref{fig:technique-22} records the split-signature matrix
+Figure~\techniqueintro{22} records the split-signature matrix
 transform route; the intended comparison includes both butterflies,
 matrix multiplication, and the same complete output as the direct route.
 
@@ -517,9 +605,9 @@ compares prepared sectors with the direct exact route under the same
 independent signed-blade oracle. The underlying grading is standard
 Clifford-algebra structure~\cite{breuils2019}; no performance conclusion
 is drawn before the dedicated-machine measurements.
-The compact-mask rank test (Figure~\ref{fig:technique-31}), exact
-sector split (Figure~\ref{fig:technique-32}), and combined rank/workspace
-episode (Figure~\ref{fig:technique-K1}) have separate result slots
+The compact-mask rank test (Figure~\techniqueintro{31}), exact
+sector split (Figure~\techniqueintro{32}), and combined rank/workspace
+episode (Figure~\techniqueintro{K1}) have separate result slots
 because their certificates and retained storage differ.
 
 \techniqueplot{31}{Binary support rank}{Ambient dimension, compressed rank, cocycle preparation, and complete episode.}
@@ -542,8 +630,39 @@ whereas Figure~\ref{fig:technique-05} isolates exact grade pruning.
 The comparisons apply only to the requested outputs and operations
 declared for their respective campaigns.
 
-\techniqueplot{04}{Targeted recursion}{Visited branches and exact requested-output time across support patterns.}
-\techniqueplot{05}{Exact grade filter}{Reachable grades, pruned branches, and total cost by operation.}
+\techniqueguide{04}{recursive evaluation of selected triple-product coefficients}
+The requested result is five named coefficients of the ordered
+expression \((ab)c\), not its full multivector. The candidate prepares
+an expression tree and evaluates only those outputs using recursive
+traversal; the baseline computes the ordinary nested products and then
+extracts the same five coefficients. All extracted numbers are copied
+into an owned matrix. The three operands have small, fixed sparse
+support patterns that include low and high blade masks; support shape
+is \emph{not} an axis of this grid. It varies
+\(n=2,\ldots,8,16,32,64,65,96,128,129\), \(H=1\) or \(32\), and
+positive, mixed, or degenerate metric signature. Color and shape
+identify horizon and signature if enough cases have qualified. A
+faster warm point would say only that selected-output recursive
+evaluation beat full nested multiplication on that case; it would
+not establish lower plan-building or complete-episode cost.
+\techniqueplot{04}{Recursive selected coefficients}{Other support patterns, plan construction, and complete-episode cost.}
+
+\techniqueguide{05}{exact left-contraction coefficient queries}
+This grid fixes the operator to \emph{left contraction}: only terms
+whose output grade equals right grade minus left grade are admissible.
+The candidate asks for eight specified output coefficients directly;
+the baseline computes the complete left contraction and extracts those
+same eight numbers. Both return an owned coefficient matrix. The two
+input supports are fixed sparse sets of low, near-high, and full blade
+masks. No operation or requested-coefficient-count comparison is
+present in this panel. The varied parameters are
+\(n=2,\ldots,8,16,32,64,65,96,128,129\), \(H=1\) or \(32\), and the
+three metric signatures. The legend uses horizon and signature when
+the qualified subset contains them. The term \emph{exact filter}
+means a grade rule proves a term cannot contribute; it is not an
+approximate cutoff. A warm advantage must still be weighed against
+any preparation and the full episode.
+\techniqueplot{05}{Exact left-contraction queries}{Other operators, requested-output counts, preparation, and full-episode cost.}
 
 For a selected output mask \(K\), an XOR join probes only compatible
 operand masks. For a selected coefficient of \((ab)c\), a three-way
@@ -558,8 +677,36 @@ Figures~\ref{fig:technique-06} and \ref{fig:technique-07}
 separate a two-input XOR lookup from a three-input ordered join.
 Their standard routes answer the same selected-output request.
 
-\techniqueplot{06}{XOR join}{Index construction, probes, and total cost by requested coefficient count.}
-\techniqueplot{07}{Join-three}{Direct ternary join versus ordered nested products for the same output.}
+\techniqueguide{06}{XOR-compatible queries for one geometric product}
+The candidate requests eight specific coefficients of \(ab\). For
+each output blade mask \(K\), a contributing pair must satisfy
+\(A\mathbin{\triangle}B=K\), where \(\triangle\) is symmetric
+difference of the sets of basis directions. This narrows which pairs
+need examination; signs and metric factors are still computed exactly.
+The baseline forms the whole geometric product and extracts the same
+eight coefficients. Input supports and target count are fixed, and
+both routes return an owned matrix. The grid varies
+\(n=2,\ldots,8,16,32,64,65,96,128,129\), \(H=1\) or \(32\), and
+positive, mixed, or degenerate metric signature; horizon and signature
+are the possible visual categories. It does not vary the number of
+requested coefficients, even though that would be a useful later
+test. The warm ratio alone excludes indexing setup and episode cost.
+\techniqueplot{06}{Selected geometric-product coefficients}{Indexing cost, varying target counts, and complete-episode cost.}
+
+\techniqueguide{07}{three-input join for selected ordered-product coefficients}
+This candidate uses a three-way mask relation to obtain five selected
+coefficients of \((ab)c\) without necessarily materializing the
+intermediate \(ab\). The baseline computes that same left-associated
+product directly and extracts the same five numbers; changing the
+parenthesization is not part of this test. The three sparse supports
+and target set are fixed; output is an owned matrix. The grid varies
+\(n=2,\ldots,8,16,32,64,65,96,128,129\), \(H=1\) or \(32\), and
+positive, mixed, or degenerate metric signature. Horizon and signature
+form the legend categories if the qualified subset permits them.
+Only the route for this fixed selected-output request changes. A
+faster point would show a warm benefit relative to full nested
+products; plan construction and complete-episode time still matter.
+\techniqueplot{07}{Three-input selected-output join}{Plan construction, other target sets, and complete-episode cost.}
 
 A \code{ProductPlan} or ternary plan stores paths that can be reused
 when topology is stable. It must reread coefficients and revalidate
@@ -581,7 +728,21 @@ Its measured warm-time ratios vary with the number of requests
 in the episode; Equation~\eqref{eq:episode} shows the additional
 costs needed to decide whether preparation is worthwhile overall.
 
-\techniqueplot{08}{Prepared plans}{Construction, first use, warm use, and complete episode by horizon.}
+\techniqueguide{08}{prepared vector-product plan versus direct product}
+For two sparse vectors with all (n) grade-one coefficients present,
+the candidate prepares a list of possible product paths from their
+stable support and then rereads changed numeric coefficients on each
+request. The baseline executes the ordinary direct product for the
+same vector pair at each request. Both return an owned matrix of all
+structurally possible coefficients. The grid varies
+\(n=2,\ldots,8,16,32,64,65,96,128\), \(H=1\) or \(32\), and the
+three metric signatures. Color and marker shape distinguish horizon
+and signature if present. Here \(H=1\) is one request after
+preparation, whereas \(H=32\) means 32 requests with the same support
+but new coefficients. The warm point compares execution after the
+plan exists; the plan is worthwhile only if its construction cost is
+recovered in the full (H)-request episode.
+\techniqueplot{08}{Prepared vector-product plan}{Plan construction, first use, memory, and total cost across reuse horizons.}
 
 \subsection{Expression sharing and algebraic rewriting}
 An expression DAG can share a subexpression within one evaluation
@@ -610,12 +771,26 @@ observations; identical baseline scenarios reuse their archived
 baseline measurement. An independent exact blade-word enumeration
 checks the output before timing. The figure remains provisional until
 isolated measurements qualify.
-Figures~\ref{fig:technique-16} and \ref{fig:technique-23}
+Figures~\ref{fig:technique-16} and \techniqueintro{23}
 cover expression sharing and bounded associative rewriting,
 respectively. Both require the cost of building a reusable plan
 and a complete same-output baseline before an episode comparison.
 
-\techniqueplot{16}{Expression DAG}{Shared subexpressions, invalidations, and total episode cost.}
+\techniqueguide{16}{reusing one product node and invalidating changed values}
+The expression is either \(ab+ab\), labelled \emph{shared}, or
+\(ab+ac\), labelled \emph{distinct}. The first form has one product
+node referenced twice; the second has two different product nodes.
+The candidate prepares a bounded expression graph and evaluates all
+coefficients twice: first with the original \(a\), then after changing
+one coefficient of \(a\). The baseline evaluates the corresponding
+direct products and sum on both inputs. This tests whether shared
+work is reused safely while changed numeric values are refreshed.
+The four cases are dimension three or four crossed with shared or
+distinct structure; metric pattern and number of evaluations are
+fixed. The corrected plot uses color for structure. All output
+coefficients are owned; a lower warm ratio would concern this small
+two-evaluation episode and would not include graph construction.
+\techniqueplot{16}{Shared versus distinct expression DAG}{Graph construction, other expression shapes, and retained memory.}
 \techniqueplot{23}{E-graph rewriting}{Bounded associative saturation, support-cost extraction, plan preparation, full-output execution, and shared baseline.}
 
 The exterior product can be written as a signed disjoint convolution:
@@ -636,7 +811,7 @@ $O(n^2 2^n)$~\cite{bjorklund2007}; its transform does not immediately
 preserve the anticommutative shuffle sign. The present exact scan
 therefore makes no claim to that bound, nor to a geometric-product
 algorithm. Its figure remains provisional until an isolated run.
-Figure~\ref{fig:technique-39} is the signed disjoint-convolution
+Figure~\techniqueintro{39} is the signed disjoint-convolution
 experiment for the exterior product; its requested output is not
 the full geometric product.
 
@@ -679,7 +854,7 @@ dominate. We use arbitrary-precision integer coefficients so that
 the bilinear identity and inverse transform remain exact. The domain
 is bounded to interleaved $\mathrm{Cl}(r,r)$ with $1\leq r\leq5$;
 outside that domain the route refuses rather than approximates.
-Figure~\ref{fig:technique-40} locates the bounded seven-product
+Figure~\techniqueintro{40} locates the bounded seven-product
 bilinear kernel experiment, including the conversion to and from
 the split-signature matrix representation.
 
@@ -702,8 +877,8 @@ The campaigns vary support width, left-operand reuse, preparation,
 episode horizon, cutoff or cost weights. Independent blade-word
 enumeration checks the complete aggregate. Both figures remain
 provisional until isolated measurements qualify.
-Figure~\ref{fig:technique-41} concerns the certified small-kernel
-search; Figure~\ref{fig:technique-42} concerns exact frontier
+Figure~\techniqueintro{41} concerns the certified small-kernel
+search; Figure~\techniqueintro{42} concerns exact frontier
 scheduling for a requested chain coefficient. Their output
 contracts differ, so their ratios must be interpreted within
 their own same-input comparisons.
@@ -732,7 +907,22 @@ warm-execution advantage for the displayed cases, while preparation,
 retained memory, and owned-output costs still need separate plots
 before a complete-episode conclusion can be drawn.}{}
 
-\techniqueplot{09}{Reusable workspace}{Preparation, allocations, retained bytes, and owned-output cost from small dimensions upward.}
+\techniqueguide{09}{reused product workspace versus direct execution}
+Both routes multiply the same pair of sparse vectors, with all (n)
+grade-one coefficients present, and write all structurally possible
+coefficients to an owned matrix. The candidate first prepares a
+product plan and private reusable workspace; its timed call refills
+buffers and copies out the result. The baseline calls the direct
+geometric product on the identical coefficients. The grid uses
+\(n=2,\ldots,8,16,32,64,65,96,128\), \(H=1\) or \(32\), and the
+positive, mixed, or degenerate metric. In the present qualified panel,
+color separates \(H=1\) from \(H=32\), and marker shapes separate
+metric signatures. A point below the black line means a faster warm
+call for that exact case, not that reserving memory and constructing
+the plan paid off in total. The output is copied and owned in both
+routes; the panel does not quantify workspace bytes retained between
+calls.
+\techniqueplot{09}{Reused vector-product workspace}{Preparation, allocations, retained bytes, and complete-episode cost.}
 
 The proposed RAM-bounded route asks whether an exact output can be
 streamed in blocks or recomputed from checkpoints when a full
@@ -764,10 +954,85 @@ panel, color identifies the request trace and marker shape the
 episode length; the figures do not yet show hit rate, rebuild cost,
 or a direct four-policy ranking.
 
-\techniqueplot{10}{LRU plan cache}{Trace, capacity, hit rate, rebuild time, and complete episode.}
-\techniqueplot{11}{Roulette eviction}{The same traces with varied selection exponent and seed.}
-\techniqueplot{12}{TinyLFU admission}{Frequency-estimation cost, admission decisions, hit rate, and episode.}
-\techniqueplot{13}{SIEVE eviction}{Second-chance scans, eviction cost, hit rate, and episode.}
+In all four cache panels, a \emph{context} is one of four fixed pairs of
+input blade supports; numeric coefficients change at each request.
+The \emph{scan} trace cycles through all four contexts on consecutive
+requests. The \emph{phase} trace spends roughly one quarter of the
+episode on each context before switching. The \emph{shift} trace
+switches context every two requests. \(H=32\) or \(1024\) counts the
+entire ordered sequence of products, not a number of repetitions of
+one fixed product. \emph{Capacity} one or two means enough budget for
+approximately one or two cached plans while four contexts compete.
+Each panel compares one named cache policy with direct uncached
+Garamon.jl products on the identical trace and returns an owned
+coefficient matrix. A policy's relative height in its own panel is
+not a direct policy-to-policy comparison because each has its own
+baseline samples and potentially different completed cases.
+
+\techniqueguide{10}{least-recently-used plan retention}
+LRU discards the plan whose last access is oldest when a new support
+context needs room. It never changes the algebraic result. This grid
+varies \(n=2,\ldots,8,16,32,64,65,96,128,129\), trace
+(scan, phase, shift), \(H=32\) or \(1024\), cache capacity one or two,
+and positive, mixed, or degenerate metric signature. Color encodes
+trace and shape encodes horizon in a sufficiently complete panel;
+capacity and signature are \emph{additional} varied parameters that
+may be plotted on top of one another. The roulette exponent,
+frequency-table size, and draw seed are held at defaults and do not
+define LRU variants. The ratio answers whether this cache policy's
+warm trace execution beats uncached direct multiplication for each
+completed case; it does not isolate hit rate or plan rebuild time.
+\techniqueplot{10}{LRU plan cache}{Capacity-stratified hit rate, rebuild time, memory, and complete episode.}
+
+\techniqueguide{11}{randomized eviction of a cached plan}
+Roulette chooses a victim probabilistically when the cache is full.
+Its weight for a resident plan with \(h\) recorded hits is
+\((1+h)^{-e}\): exponent \(e=0\) makes victims equally likely, while
+larger \(e\) increasingly protects frequently reused plans. The grid
+tries \(e=0,0.5,1,2,4\) and five random draw seeds
+20260928--20261002, in addition to the same dimensions, three
+traces, \(H=32/1024\), capacities one/two, and metric signatures as
+Figure~\ref{fig:technique-10}. Randomness chooses which plan is
+reconstructed, never which product terms are kept. Color identifies
+trace and marker shape horizon when available; exponent, seed,
+capacity, and signature are not separated by the current legend and
+can overlap. The direct uncached baseline receives the identical
+request sequence. Any apparent winner in this panel needs a
+parameter-stratified follow-up before recommending a roulette setting.
+\techniqueplot{11}{Roulette plan eviction}{Separate exponent, seed, hit-rate, and memory comparisons.}
+
+\techniqueguide{12}{TinyLFU frequency-based admission}
+TinyLFU maintains approximate request frequencies and may reject a
+new plan instead of evicting a more useful resident one. The
+\emph{frequency\_slots} parameter is the number of counters per
+sketch row: 16, 256, or 4096. A larger table may reduce collisions
+but uses more memory and metadata work; it does not change product
+coefficients. The grid also varies the same dimensions, scan/phase/
+shift traces, \(H=32/1024\), capacities one/two, and positive/mixed/
+degenerate metrics. The draw seed and roulette exponent are fixed
+defaults for this policy. Color identifies trace and shape horizon
+when qualified cases cover them; counter-table size, capacity, and
+signature remain additional unencoded dimensions. The plotted ratio
+uses the same trace executed without a cache as its baseline, so it
+cannot by itself show whether better admission compensates for the
+metadata and retained memory.
+\techniqueplot{12}{TinyLFU plan admission}{Frequency-table cost, admission decisions, hit rate, and complete episode.}
+
+\techniqueguide{13}{SIEVE second-chance eviction}
+SIEVE stores resident plans in a queue and records whether each was
+visited. An eviction scan clears a visited mark and gives that plan a
+second chance; it selects an unvisited plan for removal. This changes
+cache retention, not the exact product. The grid varies the same
+dimensions, scan/phase/shift traces, \(H=32/1024\), capacities
+one/two, and three metric signatures as LRU. Roulette exponent,
+frequency-table size, and draw seed stay fixed. Color and marker
+shape encode trace and horizon when both are available; capacity and
+signature may produce same-colored overlapping points. Each ratio
+compares SIEVE with direct uncached multiplication on the same
+ordered requests. Its warm time does not expose scan counts,
+reconstruction time, or memory, all of which matter for choosing a
+cache policy.
+\techniqueplot{13}{SIEVE plan eviction}{Second-chance scans, rebuild time, hit rate, memory, and complete episode.}
 
 \subsection{JIT generation, precompilation, and restart}
 On-demand code generation may unroll a bounded path set for a
@@ -804,8 +1069,39 @@ precompilation catalogue (Figure~\ref{fig:technique-15}) have
 different setup boundaries. Warm execution alone cannot answer
 whether generation, disk build, or fresh-process reload pays off.
 
-\techniqueplot{14}{Just-in-time product generation}{Generation, compilation, code size, first use, and warm use.}
-\techniqueplot{15}{Precompilation catalogue}{Build, disk size, fresh-process reload, first use, and total episode.}
+\techniqueguide{14}{bounded generated vector-product kernel}
+The candidate generates a specialized product kernel from a prepared
+path plan with at most 256 paths. The baseline computes the same
+full vector product directly. Both routes use two sparse vectors
+with all (n) grade-one components present and return an owned
+matrix of all structurally possible coefficients. The grid varies
+\(n=2,\ldots,9,12,16\), \(H=1\) or \(32\), and positive, mixed, or
+degenerate metric signature. Color and shape identify horizon and
+signature if the qualified cases contain both. Generation and JIT
+compilation occur before the plotted warm execution. Thus a point
+below one would show the generated call runs faster after setup; it
+would not show that generating and compiling pays off for one request
+or even for a 32-request episode.
+\techniqueplot{14}{Generated vector-product kernel}{Generation, compilation, code size, first use, and complete-episode cost.}
+
+\techniqueguide{15}{trained versus untrained precompilation requests}
+The finite catalogue is trained on a full-support, three-dimensional
+Euclidean algebra (\emph{known}). An untrained four-dimensional
+context requested later is \emph{late}; \emph{changing} cycles
+through three untrained contexts. These scenario names describe the
+sequence of product requests, not three numerical methods. The
+\emph{request index} 1, 4, or 12 selects which untrained context
+starts the late or changing sequence; known is fixed to index 1.
+The grid uses \(H=1,8,32\) requests and the dimension required by
+each scenario (three for known, four otherwise). The candidate
+executes through the precompiled/generated catalogue environment;
+the baseline runs direct products on the same metrics, supports, and
+updated coefficients. Color identifies scenario; horizon and request
+index may remain unencoded by the legend and should be read from the
+case table. A warm ratio does not include native-cache construction,
+fresh-process loading, or JIT readiness, which decide whether the
+catalogue saves time in practice.
+\techniqueplot{15}{Known and untrained catalogue requests}{Native-cache build, disk size, fresh-process reload, first use, and complete episode.}
 
 \section{Specialized algebraic structure}
 \subsection{Degeneracy and short identities}
@@ -825,7 +1121,7 @@ larger ambient cases therefore use that ordinary inverse in the exactly
 isomorphic active coordinate subalgebra and embed its complete answer
 back. This baseline scope must accompany any reported timing.
 
-Figure~\ref{fig:technique-33} locates the radical-inverse
+Figure~\techniqueintro{33} locates the radical-inverse
 certificate and exact fallback experiment; a refused certificate
 remains an observed outcome rather than a missing timing point.
 
@@ -846,7 +1142,7 @@ a small active vector span for a tractable full-grade oracle. The shared
 Pfaffian workspace alternates identical and changed pools, making numeric
 cache invalidation part of the episode rather than assuming constant data.
 
-Figure~\ref{fig:technique-34} addresses short polynomial identities
+Figure~\techniqueintro{34} addresses short polynomial identities
 for powers and recurrences. Its horizon counts repeated exact
 requests under the stated certificate.
 
@@ -861,8 +1157,8 @@ floating-point cancellation need independent examination. Shared
 contractions across related chains might repay a workspace or
 cache; changing vectors invalidate numeric contractions.
 
-Figure~\ref{fig:technique-35} requests one scalar from an even
-vector chain; Figure~\ref{fig:technique-K3} tests whether sharing
+Figure~\techniqueintro{35} requests one scalar from an even
+vector chain; Figure~\techniqueintro{K3} tests whether sharing
 contractions across related chains repays workspace preparation.
 
 \techniqueplot{35}{Pfaffian scalar chain}{Chain length, construction, contractions, reuse, and oracle-checked output.}
@@ -914,7 +1210,7 @@ simulation context of noninteracting fermions and Slater states is
 established in~\cite{terhal2002,divincenzo2005}; the present exact-integer
 shear restriction is our benchmark contract.
 
-Figures~\ref{fig:technique-36} and \ref{fig:technique-37}
+Figures~\techniqueintro{36} and \techniqueintro{37}
 respectively concern the certified cross-Gram scalar pairing and
 the restricted Slater-state overlap. Both request a scalar, but
 their admission checks and baselines are distinct.
@@ -945,7 +1241,7 @@ is faster. A matrix oracle checks every resulting coefficient exactly;
 the two benchmark arms use the same seed and inputs. The placeholder
 below will be replaced only after a qualified isolated run.
 
-Figure~\ref{fig:technique-38} is the exact rational Givens
+Figure~\techniqueintro{38} is the exact rational Givens
 basis-change comparison. Its two arms return the same transformed
 multivector, with separate preparation and application costs.
 
@@ -1023,8 +1319,8 @@ metric-changing episodes. It records the number of fallbacks and the
 gap between predicted and actual intermediate support. The figure
 remains provisional until an isolated run.
 
-Figures~\ref{fig:technique-44}, \ref{fig:technique-45}, and
-\ref{fig:technique-46} cover complete integer reconstruction,
+Figures~\techniqueintro{44}, \techniqueintro{45}, and
+\techniqueintro{46} cover complete integer reconstruction,
 one exact coefficient-sign decision, and a chained structural
 certificate, respectively. Their outputs differ, so each figure
 uses its own same-contract standard route.
@@ -1046,8 +1342,8 @@ study must report whole-trajectory error, rare events, bias,
 random seeds, and the cost of any residual or replay. The
 approximate API and its figures remain separate from the exact
 comparisons.
-Figure~\ref{fig:technique-24} is the deferred exact-replay slot;
-Figure~\ref{fig:technique-25} is the explicitly approximate
+Figure~\techniqueintro{24} is the deferred exact-replay slot;
+Figure~\techniqueintro{25} is the explicitly approximate
 pruning and roulette slot. Their error contracts must not be
 collapsed into one speed comparison.
 
@@ -1066,8 +1362,8 @@ and borrowed device output from owned host output~\cite{cudaperf}.
 Kernel fusion and captured graphs are separate candidates for
 repeated resident work; their preparation and output semantics
 must match the CPU episode being compared.
-Figures~\ref{fig:technique-27}, \ref{fig:technique-28}, and
-\ref{fig:technique-29} separate CPU threads, CPU processes, and GPU
+Figures~\techniqueintro{27}, \techniqueintro{28}, and
+\techniqueintro{29} separate CPU threads, CPU processes, and GPU
 kernels. The full comparison for each includes its own packing,
 communication, transfer, and output-ownership boundary.
 
@@ -1086,7 +1382,7 @@ combinations only after qualified measurements exist. SHAP-style
 attribution may help explain a trained selector~\cite{shap};
 it is not evidence that an algorithm is intrinsically faster.
 Until then, no learned routing threshold is claimed.
-Figure~\ref{fig:technique-26} is the analytic-selector slot.
+Figure~\techniqueintro{26} is the analytic-selector slot.
 Its regret can be interpreted only after the admissible exact
 routes and the cost of extracting their features are measured.
 

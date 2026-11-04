@@ -198,6 +198,25 @@ end
     parameters["c"]["strategy"]="dense"
     parameters["d"]["strategy"]="dense"
     @test GaramonBench._technique_plot_axes(rows,parameters)==("support","")
+
+    dag_cases=Dict(
+        "a"=>Dict("structure"=>"shared","dimension"=>3),
+        "b"=>Dict("structure"=>"distinct","dimension"=>3),
+        "c"=>Dict("structure"=>"shared","dimension"=>4),
+        "d"=>Dict("structure"=>"distinct","dimension"=>4))
+    @test GaramonBench._technique_plot_axes(rows,dag_cases)==("structure","")
+    @test occursin("shared or distinct",
+        GaramonBench._technique_axis_meaning("structure"))
+
+    catalogue_cases=Dict(
+        "a"=>Dict("scenario"=>"known","horizon"=>1,"request_index"=>1),
+        "b"=>Dict("scenario"=>"late","horizon"=>8,"request_index"=>4),
+        "c"=>Dict("scenario"=>"changing","horizon"=>32,"request_index"=>12),
+        "d"=>Dict("scenario"=>"late","horizon"=>32,"request_index"=>1))
+    @test GaramonBench._technique_plot_axes(rows,catalogue_cases)==("scenario","")
+    catalogue_caption=GaramonBench._technique_caption_text(rows,catalogue_cases,21)
+    @test occursin("horizon=1/8/32",catalogue_caption)
+    @test occursin("request\\_index=1/4/12",catalogue_caption)
 end
 
 @testset "concurrent article builds publish complete PDFs" begin
