@@ -23,6 +23,23 @@ end
 
 _bench_warm_times(sample_file)=_bench_phase_times(sample_file,"warm")
 
+function _technique_archived_cases(config,manifest;archive="")
+    cases=expand_cases(config)
+    expected=get(manifest,"case_ids",nothing)
+    isnothing(expected) && return cases
+    by_id=Dict(case_id(case)=>case for case in cases)
+    actual=Set(keys(by_id))
+    recorded=Set(expected)
+    length(expected)==length(cases) && length(recorded)==length(expected) &&
+        actual==recorded ||
+        error("Archived benchmark case set differs from its configuration: "*archive*
+            " (missing "*string(length(setdiff(recorded,actual)))*
+            ", unexpected "*string(length(setdiff(actual,recorded)))*")")
+    # TOML round-tripping can change dictionary traversal and Cartesian-grid
+    # enumeration. Keep the archive's original order after matching identities.
+    [by_id[id] for id in expected]
+end
+
 """Read only oracle-validated case outputs; preserve each parameter tuple.
 Ratios always use the standard baseline on that exact case, including cached
 baseline measurements. They never compare different scenario inputs.
@@ -35,7 +52,7 @@ function _technique_report_rows(row,config,archive)
     samples=config["limits"]["samples"]
     rows=NamedTuple[]
     parameters=Dict{String,Any}()
-    for case in expand_cases(config)
+    for case in _technique_archived_cases(config,manifest;archive)
         id=case_id(case)
         directory=joinpath(archive,"cases",id)
         isfile(joinpath(directory,"completion.toml")) || continue
@@ -300,7 +317,7 @@ function _refresh_technique_benchmark_article(row,config,archive;
     rows,parameters=_technique_report_rows(row,config,archive)
     isempty(rows) && return nothing
     manifest=TOML.parsefile(joinpath(archive,"campaign.toml"))
-    cases=expand_cases(config)
+    cases=_technique_archived_cases(config,manifest;archive)
     skipped_ids=_resume_budget_ids(archive,cases,manifest)
     budget_skips=[begin
         record=TOML.parsefile(joinpath(archive,"budget-skips",case_id(case)*".toml"))
@@ -389,8 +406,8 @@ function _technique_archive_config(archive)
     isfile(path) || error("Archived benchmark configuration is missing: "*path)
     config=TOML.parsefile(path)
     manifest=TOML.parsefile(joinpath(archive,"campaign.toml"))
-    case_id.(expand_cases(config))==manifest["case_ids"] ||
-        error("Archived benchmark configuration differs from its case identities: "*archive)
+    haskey(manifest,"case_ids") || error("Archived case identities are missing: "*archive)
+    _technique_archived_cases(config,manifest;archive)
     config
 end
 
@@ -442,7 +459,8 @@ function _recover_raw_technique_figure(row,archive_paths,processed_root,figure_r
             config["campaign"]["condition"]=="isolated" || continue
         # Each technique has a particular adapter, strategy, and operation.
         # Do not substitute another benchmark family with the same directory name.
-        cases=expand_cases(config)
+        cases=_technique_archived_cases(config,
+            TOML.parsefile(joinpath(archive,"campaign.toml"));archive)
         expected=row["case"]
         all(case->all(get(case,key,nothing)==expected[key]
             for key in ("adapter","strategy","operation") if haskey(expected,key)),cases) ||
@@ -456,7 +474,7 @@ function _recover_raw_technique_figure(row,archive_paths,processed_root,figure_r
         rows,parameters=_technique_report_rows(row,config,archive)
         isempty(rows) && continue
         timings=Dict(r.case_id=>(r.median_ns,r.baseline_median_ns) for r in rows)
-        push!(candidates,(;archive,config,timings,parameters,planned_ids=case_id.(cases)))
+        push!(candidates,(;archive,config,timings,parameters,planned_ids=Set(case_id.(cases))))
     end
     isempty(candidates) && return nothing
     reference=first(candidates)

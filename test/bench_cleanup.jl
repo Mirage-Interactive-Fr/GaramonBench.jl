@@ -118,6 +118,39 @@ end
     @test samefile(project_arg[length("--project=")+1:end],pkgdir(GaramonBench))
 end
 
+@testset "archived grade-product grids survive TOML reordering" begin
+    row=only(filter(row->row["id"]=="03",technique_smoke_plan()))
+    original=GaramonBench._resume_config(GaramonBench.technique_bench_config(row))
+    cases=expand_cases(original)
+    ids=case_id.(cases)
+    @test length(ids)==168
+    mktempdir() do archive
+        config_file=joinpath(archive,"configuration.toml")
+        manifest_file=joinpath(archive,"campaign.toml")
+        manifest=Dict("case_ids"=>ids)
+        GaramonBench.write_toml(config_file,original)
+        GaramonBench.write_toml(manifest_file,manifest)
+        restored=GaramonBench._technique_archive_config(archive)
+        @test Dict(case_id(case)=>case for case in expand_cases(restored))==
+            Dict(case_id(case)=>case for case in cases)
+        @test case_id.(GaramonBench._technique_archived_cases(restored,manifest))==ids
+        # Independent case identity, rather than enumeration order, defines
+        # membership. Reporting retains the manifest's original order.
+        manifest["case_ids"]=reverse(ids)
+        GaramonBench.write_toml(manifest_file,manifest)
+        @test GaramonBench._technique_archive_config(archive)==restored
+        @test case_id.(GaramonBench._technique_archived_cases(restored,manifest))==reverse(ids)
+        changed=deepcopy(restored)
+        changed["grid"]["dimension"][1]=13
+        GaramonBench.write_toml(config_file,changed)
+        @test_throws ErrorException GaramonBench._technique_archive_config(archive)
+        GaramonBench.write_toml(config_file,restored)
+        manifest["case_ids"][end]=manifest["case_ids"][1]
+        GaramonBench.write_toml(manifest_file,manifest)
+        @test_throws ErrorException GaramonBench._technique_archive_config(archive)
+    end
+end
+
 @testset "technique article data use validated same-case baselines" begin
     mktempdir() do root
         archive=joinpath(root,"benchmark","28")
