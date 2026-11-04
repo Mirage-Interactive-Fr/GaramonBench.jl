@@ -7,9 +7,9 @@ package includes Garamon.jl strategies and matched C++/Julia routes. Other
 GA libraries are added only for mathematical workloads they can implement
 and validate.
 
-The accompanying article is a methods manuscript. It contains empty result
-slots and no preliminary timing claims. Qualified results from the dedicated
-benchmark machine will fill those slots.
+The accompanying article is a methods manuscript with qualified partial
+warm-time panels, validation-only cards, and empty result slots. Its planned
+full-episode and cross-library comparisons require separate evidence.
 
 ## Install
 
@@ -414,6 +414,22 @@ Pass `article_every_cases=100` to refresh during a long route using only its
 completed, oracle-validated cases. The plot title reports partial coverage.
 Pass `update_article=false` to postpone rendering. A completed campaign can
 be called again to regenerate its article artifacts without rerunning cases.
+To regenerate every available qualified plot and the article from an existing
+archive, without running any experiment, use the same output directory as the
+campaign:
+
+~~~sh
+julia scripts/bench.jl --refresh-article --output=/path/to/existing/campaign
+~~~
+
+On benchmark resume, the controller performs this article refresh first,
+before preflights or timing workers start. If rendering or LaTeX compilation
+fails, the benchmark does not resume. The refreshed plots distinguish varying
+scenario axes by color and marker; the derived CSV also exposes those axes.
+Stopping with Ctrl-C retains completed cases. After an output-code update,
+resume with the original command and `--allow-source-changes`; validated cases
+are checked and skipped. Keep the same `--output` and any original `--ids` or
+`--gpu` options. This does not reset the campaign or delete raw measurements.
 
 The configurations under config/ and adapters under adapters/ define
 oracle preflights, CPU and GPU routes, matched C++/Julia kernels, cache

@@ -1,6 +1,6 @@
 # Launch from any working directory: julia /path/to/GaramonBench/scripts/bench.jl
 if "--help" in ARGS
-    println("Usage: julia scripts/bench.jl [--preflight] [--ids=17,18] [--output=PATH] [--allow-source-changes] [--gpu=auto|required|off] [--no-progress]")
+    println("Usage: julia scripts/bench.jl [--preflight|--refresh-article] [--ids=17,18] [--output=PATH] [--allow-source-changes] [--gpu=auto|required|off] [--no-progress]")
     println("The default runs the dedicated-machine technique campaign. Repeat the same options to resume.")
     exit()
 end
@@ -15,6 +15,8 @@ function options(args)
     for arg in args
         if arg=="--preflight"
             phase=:preflight
+        elseif arg=="--refresh-article"
+            phase=:refresh_article
         elseif arg=="--allow-source-changes"
             allow_source_changes=true
         elseif arg=="--no-progress"
@@ -47,6 +49,12 @@ using GaramonBench
 destination=isnothing(settings.output) ? DrWatson.datadir("garamonbench","techniques-dedicated-001") : settings.output
 println("Project: ",Base.active_project())
 println("Campaign: ",abspath(destination))
-run_technique_campaign(destination;ids=settings.ids,gpu=settings.gpu,
-    phase=settings.phase,allow_source_changes=settings.allow_source_changes,
-    show_progress=settings.show_progress)
+if settings.phase==:refresh_article
+    result=refresh_technique_article(destination;ids=settings.ids)
+    println("Article: ",result.article_pdf,
+        "; measured figures rebuilt: ",length(result.figures))
+else
+    run_technique_campaign(destination;ids=settings.ids,gpu=settings.gpu,
+        phase=settings.phase,allow_source_changes=settings.allow_source_changes,
+        show_progress=settings.show_progress)
+end

@@ -182,6 +182,19 @@ end
     end
 end
 
+@testset "technique plots distinguish measured scenario categories" begin
+    parameters=Dict(
+        "a"=>Dict("strategy"=>"dense","support"=>"basis","signature"=>"mixed"),
+        "b"=>Dict("strategy"=>"dense","support"=>"broad","signature"=>"mixed"),
+        "c"=>Dict("strategy"=>"sparse","support"=>"basis","signature"=>"mixed"),
+        "d"=>Dict("strategy"=>"sparse","support"=>"broad","signature"=>"mixed"))
+    rows=[(;case_id=id) for id in ("a","b","c","d")]
+    @test GaramonBench._technique_plot_axes(rows,parameters)==("strategy","support")
+    parameters["c"]["strategy"]="dense"
+    parameters["d"]["strategy"]="dense"
+    @test GaramonBench._technique_plot_axes(rows,parameters)==("support","")
+end
+
 @testset "concurrent article builds publish complete PDFs" begin
     @test GaramonBench._article_plotsdir("probe") ==
         joinpath(pkgdir(GaramonBench),"plots","probe")

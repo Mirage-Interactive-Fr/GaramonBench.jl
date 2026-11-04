@@ -60,6 +60,18 @@ function _technique_report_rows(row,config,archive)
             execution_signature=get(marker,"execution_signature",manifest["run_signature"]),
             dimension=get(case,"dimension",0),
             family=string(get(case,"family",get(case,"signature","scenario"))),
+            strategy=string(get(case,"strategy","")),
+            support=string(get(case,"support","")),
+            grade_pair=string(get(case,"grade_pair","")),
+            operation=string(get(case,"operation","")),
+            trace=string(get(case,"trace","")),
+            scenario=string(get(case,"scenario","")),
+            signature=string(get(case,"signature","")),
+            horizon=string(get(case,"horizon","")),
+            capacity_plans=string(get(case,"capacity_plans","")),
+            eviction_exponent=string(get(case,"eviction_exponent","")),
+            frequency_slots=string(get(case,"frequency_slots","")),
+            draw_seed=string(get(case,"draw_seed","")),
             seed=case["seed"],samples=samples,median_ns=value,
             q25_ns=quantile(warm,0.25),q75_ns=quantile(warm,0.75),
             baseline_name=verdict["baseline_name"],baseline_median_ns=reference,
@@ -70,27 +82,65 @@ function _technique_report_rows(row,config,archive)
     rows,parameters
 end
 
-function _render_technique_plot_loaded(xkcd,row,rows,total,destination;budget_skips=NamedTuple[])
+const _TECHNIQUE_PLOT_AXES=("strategy","support","grade_pair","trace",
+    "scenario","horizon","operation","signature","family","capacity_plans",
+    "eviction_exponent","frequency_slots","draw_seed")
+
+function _technique_plot_axes(rows,parameters)
+    cases=[parameters[r.case_id] for r in rows]
+    varying=[key for key in _TECHNIQUE_PLOT_AXES if
+        2<=length(unique(string(get(case,key,"")) for case in cases))<=6]
+    color_key=isempty(varying) ? "" : first(varying)
+    color_count=isempty(color_key) ? 1 :
+        length(unique(string(get(case,color_key,"")) for case in cases))
+    marker_candidates=[key for key in varying if key!=color_key &&
+        length(unique(string(get(case,key,"")) for case in cases))<=4 &&
+        color_count*length(unique(string(get(case,key,"")) for case in cases))<=8]
+    color_key,isempty(marker_candidates) ? "" : first(marker_candidates)
+end
+
+_technique_plot_value(parameters,id,key)=isempty(key) ? "" :
+    string(get(parameters[id],key,""))
+
+function _render_technique_plot_loaded(xkcd,row,rows,parameters,total,destination;
+                                       budget_skips=NamedTuple[])
     isempty(rows) && error("no qualified technique cases to plot")
+    color_key,marker_key=_technique_plot_axes(rows,parameters)
+    colored=isempty(color_key) ? [""] :
+        sort!(unique(_technique_plot_value(parameters,r.case_id,color_key) for r in rows))
+    marked=isempty(marker_key) ? [""] :
+        sort!(unique(_technique_plot_value(parameters,r.case_id,marker_key) for r in rows))
+    colors=[:steelblue3,:darkorange2,:seagreen3,:purple3,:goldenrod3,:slategray3]
+    markers=[:circle,:rect,:diamond,:star5]
     xkcd.with_theme(xkcd.theme_xkcd()) do
-        figure=xkcd.Figure(size=(960,520),backgroundcolor=:white)
+        figure=xkcd.Figure(size=(1200,560),backgroundcolor=:white)
         axis=xkcd.Axis(figure[1,1],
             title=row["id"]*" "*row["name"]*" — "*string(length(rows))*"/"*string(total)*" qualified cases",
             xlabel="Algebra dimension",ylabel="Warm time / same-input Garamon.jl baseline",
             yscale=log10)
-        colors=[:steelblue3,:darkorange2,:seagreen3,:purple3,:goldenrod3,:slategray3]
-        for (index,family) in enumerate(sort!(unique(r.family for r in rows)))
-            points=filter(r->r.family==family && isfinite(r.time_ratio),rows)
+        for (color_index,color_value) in enumerate(colored),
+            (marker_index,marker_value) in enumerate(marked)
+            points=filter(r->isfinite(r.time_ratio) &&
+                _technique_plot_value(parameters,r.case_id,color_key)==color_value &&
+                _technique_plot_value(parameters,r.case_id,marker_key)==marker_value,rows)
             isempty(points) && continue
             ordinary=filter(r->!r.over_baseline_budget,points)
             outside=filter(r->r.over_baseline_budget,points)
-            color=colors[mod1(index,length(colors))]
-            isempty(ordinary) || xkcd.scatter!(axis,[r.dimension for r in ordinary],
+            color=colors[color_index]
+            marker=markers[marker_index]
+            label=isempty(color_key) ? "Qualified scenarios" :
+                color_key*"="*color_value*
+                (isempty(marker_key) ? "" : "; "*marker_key*"="*marker_value)
+            # Small deterministic offsets expose points sharing a dimension.
+            group_index=(color_index-1)*length(marked)+marker_index
+            group_count=length(colored)*length(marked)
+            offset=group_count==1 ? 0.0 : 0.24*((group_index-1)/(group_count-1)-0.5)
+            isempty(ordinary) || xkcd.scatter!(axis,[r.dimension+offset for r in ordinary],
                 [clamp(r.time_ratio,1e-4,10) for r in ordinary];
-                color=(color,0.65),markersize=9,label=family)
-            isempty(outside) || xkcd.scatter!(axis,[r.dimension for r in outside],
-                fill(10.0,length(outside));color=color,marker=:utriangle,
-                markersize=13,label=family*" >10× baseline")
+                color=(color,0.65),marker,markersize=10,label)
+            isempty(outside) || xkcd.scatter!(axis,[r.dimension+offset for r in outside],
+                fill(10.0,length(outside));color,marker=:utriangle,
+                markersize=13,label=isempty(ordinary) ? label : nothing)
         end
         xkcd.hlines!(axis,[1.0];color=:black,linestyle=:dash)
         if !isempty(budget_skips)
@@ -100,9 +150,12 @@ function _render_technique_plot_loaded(xkcd,row,rows,total,destination;budget_sk
         end
         xkcd.hlines!(axis,[10.0];color=:firebrick,linestyle=:dot)
         xkcd.ylims!(axis,1e-4,16)
-        xkcd.axislegend(axis;position=:rb)
-        xkcd.Label(figure[2,1],
-            "Each point retains its full scenario in the CSV + parameter table. Triangles: >10× baseline.\nRed crosses are budget exclusions, not ratios. Ratios below 10⁻⁴ are clipped.",fontsize=14)
+        xkcd.Legend(figure[1,2],axis,"Scenario categories";tellheight=false)
+        xkcd.Label(figure[2,1:2],
+            "Color="*(isempty(color_key) ? "single scenario" : color_key)*
+            "; marker="*(isempty(marker_key) ? "single category" : marker_key)*
+            ". Other parameters remain in the CSV + parameter table. Horizontal offsets separate overlapping cases.\n"*
+            "Triangles: >10× baseline. Red crosses: budget exclusions, not ratios. Ratios below 10⁻⁴ are clipped.",fontsize=14)
         xkcd.save(destination,figure)
     end
     destination
@@ -150,7 +203,7 @@ function _refresh_technique_benchmark_article(row,config,archive;
     try
         mktempdir() do temporary
             built=joinpath(temporary,"plot.pdf")
-            Base.invokelatest(_render_technique_plot_loaded,xkcd,row,rows,
+            Base.invokelatest(_render_technique_plot_loaded,xkcd,row,rows,parameters,
                 length(expand_cases(config)),built;budget_skips)
             _publish_article_pdf(built,figure)
         end
@@ -167,6 +220,8 @@ function _refresh_technique_benchmark_article(row,config,archive;
         "total_cases"=>length(expand_cases(config)),"summary_sha256"=>_resume_sha(summary),
         "parameters_sha256"=>_resume_sha(joinpath(directory,"case_parameters.toml")),
         "figure_sha256"=>_resume_sha(figure),
+        "figure_color_axis"=>_technique_plot_axes(rows,parameters)[1],
+        "figure_marker_axis"=>_technique_plot_axes(rows,parameters)[2],
         "baseline_budget_ratio"=>10,"archive"=>abspath(archive)))
     if compile_article
         source=joinpath(dirname(@__DIR__),"papers","Garamon_research_article_2026-09-27_en.tex")
@@ -174,6 +229,32 @@ function _refresh_technique_benchmark_article(row,config,archive;
             _article_papersdir("garamonbench","techniques","qualified"))
     end
     (;summary_csv=summary,figure_pdf=figure,completed_cases=length(rows))
+end
+
+"""Rebuild article figures from validated archived cases, without running a case."""
+function refresh_technique_article(output;ids=String[],
+        processed_root=DrWatson.datadir(joinpath(dirname(@__DIR__),"data","processed","garamonbench","techniques")),
+        figure_root=_article_plotsdir("garamonbench","techniques","qualified"),
+        paper_root=_article_papersdir("garamonbench","techniques","qualified"),
+        publish_canonical::Bool=true)
+    root=dirname(@__DIR__)
+    rows=technique_smoke_plan(;benchmark_root=root)
+    requested=Set(ids)
+    isempty(requested) || issubset(requested,Set(row["id"] for row in rows)) ||
+        error("unknown technique ID")
+    selected=isempty(requested) ? rows : filter(row->row["id"] in requested,rows)
+    refreshed=NamedTuple[]
+    for row in selected
+        archive=joinpath(abspath(output),"benchmark",row["id"])
+        isfile(joinpath(archive,"campaign.toml")) || continue
+        config=technique_bench_config(row;benchmark_root=root)
+        result=_refresh_technique_benchmark_article(row,config,archive;
+            processed_root,figure_root,compile_article=false)
+        isnothing(result) || push!(refreshed,(;id=row["id"],result...))
+    end
+    source=joinpath(root,"papers","Garamon_research_article_2026-09-27_en.tex")
+    pdf=_compile_bench_article(source,figure_root,paper_root;publish_canonical)
+    (;article_pdf=pdf,figures=refreshed)
 end
 
 function _bench_summary(config,benchmark_output,destination)

@@ -594,6 +594,13 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
         for project in unique(g.project for g in groups)
             run(`$julia --startup-file=no --threads=1,0 --project=$project -e "using Pkg; Pkg.instantiate()"`)
         end
+        if phase==:benchmark &&
+                isdir(joinpath(destination,"benchmark"))
+            println("Rebuilding article from validated archived cases before resuming measurements.")
+            refreshed=refresh_technique_article(destination;ids)
+            println("Article rebuilt: ",refreshed.article_pdf,
+                " (",length(refreshed.figures)," measured figure(s))")
+        end
         gpu_status=gpu==:off ? "disabled" : "not_requested"
         if any(g->g.environment=="gpu",groups)
             project=normpath(joinpath(dirname(@__DIR__),"gpu"))

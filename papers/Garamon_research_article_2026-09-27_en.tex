@@ -1,4 +1,4 @@
-% Research manuscript: methods and benchmark protocol. No benchmark results are reported.
+% Research manuscript: methods, benchmark protocol, and qualified partial results.
 \documentclass[11pt,a4paper]{article}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
@@ -36,9 +36,14 @@
 \fbox{\parbox[c][18mm][c]{.84\linewidth}{\centering
 \textbf{Awaiting dedicated benchmark data}\\[2mm]
 \small #2}}}}
-\IfFileExists{plot_technique_#1.pdf}{\caption{#3}}{%
+\IfFileExists{plot_technique_#1.pdf}{%
+\caption{Qualified cases currently shown: warm-time ratio to the same-input
+standard Garamon.jl route. Colors and markers identify the scenario categories
+named in the plot; other parameters remain in the accompanying case table.
+Full comparison planned for this technique: #3}}{%
 \IfFileExists{preflight_technique_#1.pdf}{%
-\caption{#3 Preflight validation only; no performance result.}}{\caption{#3}}}
+\caption{Preflight validation only; no performance result. Planned comparison: #3}}{%
+\caption{Awaiting qualified measurements. Planned comparison: #3}}}
 \label{fig:technique-#1}
 \end{figure}}
 \title{Toward Workload-Aware Geometric Algebra in Garamon.jl:\\
@@ -60,9 +65,11 @@ and parallel execution. For each family we state the mathematical
 precondition, the work it may avoid, and the costs that a comparison must
 include. A DrWatson-based protocol specifies common workloads, independent
 correctness checks, matched C++/Julia comparisons, profiling, and resumable
-measurements across machines. Performance figures remain empty until
-qualified measurements are obtained on the dedicated benchmark machine.
-No speed ranking, crossover, or learned selector is inferred here.
+measurements across machines. Available performance panels show qualified
+same-input warm-time ratios; validation-only and empty slots identify work
+without such measurements. Full episode, memory, and cross-library results
+remain separate requirements. No general speed ranking or learned selector
+is inferred here.
 \end{abstract}
 
 \section{Introduction}
@@ -83,9 +90,10 @@ handled at run time~\cite{garamonjulia}. This distinction makes
 preparation, specialization, ownership of temporary memory, and the
 definition of an equivalent comparison central to the study. The
 present manuscript describes the candidate techniques and their
-experimental contracts. It deliberately contains no exploratory
-timings from earlier local runs. Figures are result slots whose
-captions specify what evidence will eventually be placed there.
+experimental contracts. It excludes exploratory timings from earlier
+local runs. Qualified partial results are shown where available; each
+caption separates the metric actually plotted from the fuller comparison
+planned for that technique.
 
 \section{Algebraic and numerical contract}
 Let \(e_A\) denote the ordered blade indexed by a bit mask \(A\).
@@ -1046,9 +1054,10 @@ general exact product. RAM and device capacity are part of
 feasibility, not afterthoughts.
 
 This manuscript establishes algorithms, their conditions, and a
-reproducible comparison design. It makes no empirical ranking.
-The next revision will populate each result slot from qualified
-dedicated-machine data, report uncertainty and rejected cases,
+reproducible comparison design. Available warm-time panels are partial
+evidence and do not establish a general empirical ranking.
+Further qualified dedicated-machine data will complete the result slots,
+report uncertainty and rejected cases,
 and only then evaluate a workload selector and its
 hyperparameters.
 
