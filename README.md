@@ -410,6 +410,10 @@ table and provenance. It renders an XKCDMakie vector PDF in the method's
 existing article slot and compiles the article. Each point compares the
 strategy with its Garamon.jl baseline on the same inputs; triangles mark
 times above 10× baseline. The CSV retains the uncapped ratios.
+Each qualified figure also receives a data-specific caption explaining its
+color and marker axes; the manuscript cites every technique figure beside
+the corresponding method discussion. The caption distinguishes the warm-time
+measurement from preparation, memory, and full-episode comparisons still planned.
 Pass `article_every_cases=100` to refresh during a long route using only its
 completed, oracle-validated cases. The plot title reports partial coverage.
 Pass `update_article=false` to postpone rendering. A completed campaign can

@@ -29,8 +29,8 @@ include("resource_failures.jl")
     content=read(source,String)
     @test occursin("\\newcommand{\\pendingfigure}",content)
     @test occursin("preflight_technique_#1.pdf",content)
-    @test occursin("Preflight validation only; no performance result.",content)
-    @test occursin("Qualified cases currently shown: warm-time ratio",content)
+    @test occursin("The displayed card verifies one oracle case",content)
+    @test occursin("plot_technique_#1_caption.tex",content)
     @test occursin("qualified_ega3_vector_libraries.pdf",content)
     @test !occursin("\\addplot",content)
     @test !occursin("exploratory_",content)
@@ -42,7 +42,10 @@ include("resource_failures.jl")
     @test length(figure_ids)==48
     @test length(unique(figure_ids))==48
     @test Set(figure_ids)==expected
-    @test occursin("\\begin{figure}[H]",content)
+    referenced_ids=Set(match.captures[1] for match in
+        eachmatch(r"\\ref\{fig:technique-([^}]+)\}",content))
+    @test referenced_ids==expected
+    @test occursin("\\begin{figure}[!thp]",content)
     @test !occursin("\\section{Result slots reserved",content)
     mktempdir() do directory
         figure=joinpath(directory,"ega3_vector_libraries.pdf")

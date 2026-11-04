@@ -86,6 +86,40 @@ const _TECHNIQUE_PLOT_AXES=("strategy","support","grade_pair","trace",
     "scenario","horizon","operation","signature","family","capacity_plans",
     "eviction_exponent","frequency_slots","draw_seed")
 
+const _TECHNIQUE_AXIS_MEANING=Dict(
+    "strategy"=>"algorithmic route",
+    "support"=>"pattern of nonzero input blades",
+    "grade_pair"=>"grades of the two operands",
+    "trace"=>"order of cache-context requests",
+    "scenario"=>"workload sequence",
+    "horizon"=>"number of requests in the episode",
+    "operation"=>"requested product operation",
+    "signature"=>"sign and degeneracy pattern of the metric",
+    "family"=>"workload family",
+    "capacity_plans"=>"number of plans the cache can retain",
+    "eviction_exponent"=>"roulette eviction weight exponent",
+    "frequency_slots"=>"frequency-table size",
+    "draw_seed"=>"pseudorandom draw seed")
+
+_technique_axis_meaning(key)=isempty(key) ? "no varying category" :
+    key*" ("*get(_TECHNIQUE_AXIS_MEANING,key,"scenario parameter")*")"
+
+function _technique_caption_text(rows,parameters,total)
+    color_key,marker_key=_technique_plot_axes(rows,parameters)
+    coverage=string(length(rows))*" of "*string(total)
+    grouping=isempty(color_key) ?
+        "The completed cases have no varying color category. " :
+        "Color distinguishes "*_technique_axis_meaning(color_key)*". "
+    grouping*=isempty(marker_key) ?
+        "No second category is encoded by marker shape. " :
+        "Marker shape distinguishes "*_technique_axis_meaning(marker_key)*". "
+    "The horizontal axis is algebra dimension; "*coverage*
+    " planned cases have qualified timing data. Each timed point is this route's "*
+    "median warm time divided by standard Garamon.jl's median warm time "*
+    "on the same input; a ratio below one means a faster warm execution. "*grouping*
+    "Preparation, memory, and complete-episode costs are not shown in this panel."
+end
+
 function _technique_plot_axes(rows,parameters)
     cases=[parameters[r.case_id] for r in rows]
     varying=[key for key in _TECHNIQUE_PLOT_AXES if
@@ -113,11 +147,12 @@ function _render_technique_plot_loaded(xkcd,row,rows,parameters,total,destinatio
     colors=[:steelblue3,:darkorange2,:seagreen3,:purple3,:goldenrod3,:slategray3]
     markers=[:circle,:rect,:diamond,:star5]
     xkcd.with_theme(xkcd.theme_xkcd()) do
-        figure=xkcd.Figure(size=(1200,560),backgroundcolor=:white)
+        figure=xkcd.Figure(size=(1200,610),backgroundcolor=:white)
         axis=xkcd.Axis(figure[1,1],
             title=row["id"]*" "*row["name"]*" — "*string(length(rows))*"/"*string(total)*" qualified cases",
             xlabel="Algebra dimension",ylabel="Warm time / same-input Garamon.jl baseline",
-            yscale=log10)
+            yscale=log10,xticklabelsize=17,yticklabelsize=17,
+            xlabelsize=19,ylabelsize=19,titlesize=20)
         for (color_index,color_value) in enumerate(colored),
             (marker_index,marker_value) in enumerate(marked)
             points=filter(r->isfinite(r.time_ratio) &&
@@ -150,12 +185,13 @@ function _render_technique_plot_loaded(xkcd,row,rows,parameters,total,destinatio
         end
         xkcd.hlines!(axis,[10.0];color=:firebrick,linestyle=:dot)
         xkcd.ylims!(axis,1e-4,16)
-        xkcd.Legend(figure[1,2],axis,"Scenario categories";tellheight=false)
+        xkcd.Legend(figure[1,2],axis,"Scenario categories";
+            tellheight=false,labelsize=18,titlesize=19)
         xkcd.Label(figure[2,1:2],
-            "Color="*(isempty(color_key) ? "single scenario" : color_key)*
-            "; marker="*(isempty(marker_key) ? "single category" : marker_key)*
-            ". Other parameters remain in the CSV + parameter table. Horizontal offsets separate overlapping cases.\n"*
-            "Triangles: >10× baseline. Red crosses: budget exclusions, not ratios. Ratios below 10⁻⁴ are clipped.",fontsize=14)
+            "Color: "*_technique_axis_meaning(color_key)*
+            "; marker: "*_technique_axis_meaning(marker_key)*".\n"*
+            "Other parameters are in the case table. Horizontal offsets separate overlapping cases.\n"*
+            "Triangles: >10× baseline. Red crosses: budget exclusions, not ratios. Ratios below 10⁻⁴ are clipped.",fontsize=16)
         xkcd.save(destination,figure)
     end
     destination
@@ -210,6 +246,8 @@ function _refresh_technique_benchmark_article(row,config,archive;
     finally
         Base.invokelatest(cairo.Makie.set_theme!,previous)
     end
+    caption=joinpath(figure_root,"plot_technique_"*row["id"]*"_caption.tex")
+    _publish_article_text(_technique_caption_text(rows,parameters,length(cases)),caption)
     _resume_write(joinpath(directory,"provenance.toml"),Dict(
         "schema_version"=>1,"qualification"=>"isolated_completed_cases_oracle_and_baseline_passed",
         "technique"=>row["id"],"run_signature"=>signature,
@@ -220,6 +258,7 @@ function _refresh_technique_benchmark_article(row,config,archive;
         "total_cases"=>length(expand_cases(config)),"summary_sha256"=>_resume_sha(summary),
         "parameters_sha256"=>_resume_sha(joinpath(directory,"case_parameters.toml")),
         "figure_sha256"=>_resume_sha(figure),
+        "caption_sha256"=>_resume_sha(caption),
         "figure_color_axis"=>_technique_plot_axes(rows,parameters)[1],
         "figure_marker_axis"=>_technique_plot_axes(rows,parameters)[2],
         "baseline_budget_ratio"=>10,"archive"=>abspath(archive)))
@@ -420,6 +459,20 @@ function _publish_article_pdf(source,destination)
         # libuv rename publishes the complete PDF in one filesystem operation.
         Base.Filesystem.rename(temporary,destination)
     finally
+        isfile(temporary) && rm(temporary)
+    end
+    destination
+end
+
+function _publish_article_text(content,destination)
+    mkpath(dirname(destination))
+    temporary,io=mktemp(dirname(destination))
+    try
+        write(io,content)
+        close(io)
+        Base.Filesystem.rename(temporary,destination)
+    finally
+        isopen(io) && close(io)
         isfile(temporary) && rm(temporary)
     end
     destination

@@ -170,6 +170,8 @@ end
             compile_article=false)
         @test report.completed_cases==2
         @test startswith(read(report.figure_pdf,String),"%PDF-")
+        caption_path=replace(report.figure_pdf,r"\.pdf$"=>"_caption.tex")
+        @test occursin("median warm time",read(caption_path,String))
         @test occursin("time_ratio,over_baseline_budget",read(report.summary_csv,String))
         provenance=TOML.parsefile(joinpath(dirname(report.summary_csv),"provenance.toml"))
         @test provenance["total_cases"]==3 && provenance["completed_cases"]==2
@@ -190,6 +192,9 @@ end
         "d"=>Dict("strategy"=>"sparse","support"=>"broad","signature"=>"mixed"))
     rows=[(;case_id=id) for id in ("a","b","c","d")]
     @test GaramonBench._technique_plot_axes(rows,parameters)==("strategy","support")
+    caption=GaramonBench._technique_caption_text(rows,parameters,8)
+    @test occursin("4 of 8 planned cases",caption)
+    @test occursin("pattern of nonzero input blades",caption)
     parameters["c"]["strategy"]="dense"
     parameters["d"]["strategy"]="dense"
     @test GaramonBench._technique_plot_axes(rows,parameters)==("support","")
