@@ -192,7 +192,24 @@ function _technique_ratio_ticks(lower,upper)
     values,[string(round(value;sigdigits=3))*"×" for value in values]
 end
 
-function _render_technique_plot_loaded(cairo,row,rows,parameters,total,destination;
+const _ARTICLE_PLOT_RENDERER="cairo-standard-v2"
+
+function _with_article_theme(f,cairo)
+    # XKCDMakie's initialization changes Makie's global theme, including
+    # its Cairo drawing hook. A reused process must explicitly disable it.
+    cairo.with_theme(f,cairo.Theme(xkcd_enabled=false,
+        fonts=(regular="TeX Gyre Heros",bold="TeX Gyre Heros Bold",
+            italic="TeX Gyre Heros Italic",bold_italic="TeX Gyre Heros Bold Italic"),
+        fontsize=18,backgroundcolor=:white))
+end
+
+function _render_technique_plot_loaded(cairo,args...;kwargs...)
+    _with_article_theme(cairo) do
+        _draw_technique_plot(cairo,args...;kwargs...)
+    end
+end
+
+function _draw_technique_plot(cairo,row,rows,parameters,total,destination;
                                        budget_skips=NamedTuple[])
     isempty(rows) && error("no qualified technique cases to plot")
     lower,upper,exclusion_y=_technique_ratio_limits(rows;
@@ -259,6 +276,23 @@ function _render_technique_plot_loaded(cairo,row,rows,parameters,total,destinati
     destination
 end
 
+function _publish_technique_plot(row,rows,parameters,total,figure_root;
+        budget_skips=NamedTuple[])
+    mkpath(figure_root)
+    figure=joinpath(figure_root,"plot_technique_"*row["id"]*".pdf")
+    @eval import CairoMakie
+    cairo=Base.invokelatest(getfield,@__MODULE__,:CairoMakie)
+    mktempdir() do temporary
+        built=joinpath(temporary,"plot.pdf")
+        Base.invokelatest(_render_technique_plot_loaded,cairo,row,rows,parameters,
+            total,built;budget_skips)
+        _publish_article_pdf(built,figure)
+    end
+    caption=joinpath(figure_root,"plot_technique_"*row["id"]*"_caption.tex")
+    _publish_article_text(_technique_caption_text(rows,parameters,total),caption)
+    figure,caption
+end
+
 function _refresh_technique_benchmark_article(row,config,archive;
         processed_root=DrWatson.datadir(joinpath(dirname(@__DIR__),"data","processed","garamonbench","techniques")),
         figure_root=_article_plotsdir("garamonbench","techniques","qualified"),
@@ -291,18 +325,8 @@ function _refresh_technique_benchmark_article(row,config,archive;
     end
     _resume_write(joinpath(directory,"case_parameters.toml"),parameters)
     isempty(budget_skips) || write_csv(joinpath(directory,"budget_skips.csv"),budget_skips)
-    mkpath(figure_root)
-    figure=joinpath(figure_root,"plot_technique_"*row["id"]*".pdf")
-    @eval import CairoMakie
-    cairo=Base.invokelatest(getfield,@__MODULE__,:CairoMakie)
-    mktempdir() do temporary
-        built=joinpath(temporary,"plot.pdf")
-        Base.invokelatest(_render_technique_plot_loaded,cairo,row,rows,parameters,
-            length(expand_cases(config)),built;budget_skips)
-        _publish_article_pdf(built,figure)
-    end
-    caption=joinpath(figure_root,"plot_technique_"*row["id"]*"_caption.tex")
-    _publish_article_text(_technique_caption_text(rows,parameters,length(cases)),caption)
+    figure,caption=_publish_technique_plot(row,rows,parameters,length(cases),
+        figure_root;budget_skips)
     _resume_write(joinpath(directory,"provenance.toml"),Dict(
         "schema_version"=>1,"qualification"=>"isolated_completed_cases_oracle_and_baseline_passed",
         "technique"=>row["id"],"run_signature"=>signature,
@@ -314,6 +338,7 @@ function _refresh_technique_benchmark_article(row,config,archive;
         "parameters_sha256"=>_resume_sha(joinpath(directory,"case_parameters.toml")),
         "figure_sha256"=>_resume_sha(figure),
         "caption_sha256"=>_resume_sha(caption),
+        "plot_renderer"=>_ARTICLE_PLOT_RENDERER,
         "figure_color_axis"=>_technique_plot_axes(rows,parameters)[1],
         "figure_marker_axis"=>_technique_plot_axes(rows,parameters)[2],
         "baseline_budget_ratio"=>10,"archive"=>abspath(archive)))
@@ -325,7 +350,121 @@ function _refresh_technique_benchmark_article(row,config,archive;
     (;summary_csv=summary,figure_pdf=figure,completed_cases=length(rows))
 end
 
-"""Rebuild article figures from validated archived cases, without running a case."""
+function _technique_csv_records(path)
+    function fields(line)
+        result=String[]; buffer=IOBuffer(); quoted=false
+        i=firstindex(line)
+        while i<=lastindex(line)
+            char=line[i]
+            if char=='"'
+                following=nextind(line,i)
+                if quoted && following<=lastindex(line) && line[following]=='"'
+                    write(buffer,'"');i=following
+                else
+                    quoted=!quoted
+                end
+            elseif char==',' && !quoted
+                push!(result,String(take!(buffer)))
+            else
+                write(buffer,char)
+            end
+            i=nextind(line,i)
+        end
+        quoted && error("incomplete quoted CSV field in "*path)
+        push!(result,String(take!(buffer)))
+        result
+    end
+    lines=readlines(path)
+    isempty(lines) && error("empty retained report: "*path)
+    header=fields(first(lines))
+    [begin
+        values=fields(line)
+        length(values)==length(header) || error("retained CSV width changed: "*path)
+        Dict(zip(header,values))
+    end for line in lines[2:end]]
+end
+
+"""Regenerate a retained plot from its own checksum-verified measurement
+summary. Never replace it with another campaign or infer numbers from a PDF.
+"""
+function _refresh_retained_technique_figure(row,processed_root,figure_root)
+    figure=joinpath(figure_root,"plot_technique_"*row["id"]*".pdf")
+    isfile(figure) || return nothing
+    digest=_resume_sha(figure)
+    directory=joinpath(processed_root,row["id"])
+    candidates=Pair{String,Any}[]
+    if isdir(directory)
+        for (root,_,files) in walkdir(directory)
+            "provenance.toml" in files || continue
+            path=joinpath(root,"provenance.toml")
+            provenance=TOML.parsefile(path)
+            get(provenance,"technique","")==row["id"] &&
+                get(provenance,"figure_sha256","")==digest &&
+                push!(candidates,path=>provenance)
+        end
+    end
+    isempty(candidates) && error("Technique "*row["id"]*
+        ": a retained figure has no matching validated report in "*directory*
+        ". Rebuild stopped; existing data and figure were kept.")
+    identities=unique((p.second["summary_sha256"],p.second["parameters_sha256"],
+        p.second["total_cases"]) for p in candidates)
+    length(identities)==1 || error("Ambiguous measurement provenance for technique "*row["id"])
+    provenance_path,provenance=first(sort!(candidates;by=first))
+    provenance["qualification"]=="isolated_completed_cases_oracle_and_baseline_passed" ||
+        error("unqualified retained report for technique "*row["id"])
+    summary=joinpath(dirname(provenance_path),"summary.csv")
+    parameter_file=joinpath(dirname(provenance_path),"case_parameters.toml")
+    _resume_sha(summary)==provenance["summary_sha256"] ||
+        error("retained summary changed for technique "*row["id"])
+    _resume_sha(parameter_file)==provenance["parameters_sha256"] ||
+        error("retained case parameters changed for technique "*row["id"])
+    parameters=TOML.parsefile(parameter_file)
+    rows=[begin
+        id=record["case_id"]
+        record["technique"]==row["id"] && record["condition"]=="isolated" ||
+            error("retained case qualification differs")
+        haskey(parameters,id) && case_id(parameters[id])==id ||
+            error("retained case identity differs")
+        dimension=parse(Int,record["dimension"])
+        dimension==get(parameters[id],"dimension",0) ||
+            error("retained dimension differs")
+        ratio=parse(Float64,record["time_ratio"])
+        candidate=parse(Float64,record["median_ns"])
+        baseline=parse(Float64,record["baseline_median_ns"])
+        isfinite(ratio) && ratio>0 && baseline>0 &&
+            isapprox(ratio,candidate/baseline;rtol=1e-12) ||
+            error("retained paired timing ratio differs")
+        (;case_id=id,dimension,time_ratio=ratio,over_baseline_budget=ratio>10)
+    end for record in _technique_csv_records(summary)]
+    length(rows)==provenance["completed_cases"] &&
+        length(unique(r.case_id for r in rows))==length(rows) ||
+        error("retained completed case count differs")
+    skips=NamedTuple[]
+    skip_count=get(provenance,"budget_skipped_cases",0)
+    if skip_count>0
+        skip_file=joinpath(dirname(provenance_path),"budget_skips.csv")
+        for record in _technique_csv_records(skip_file)
+            id=record["case_id"]
+            haskey(parameters,id) && case_id(parameters[id])==id ||
+                error("retained resource exclusion has no verified case")
+            push!(skips,(;case_id=id,dimension=Int(parameters[id]["dimension"])))
+        end
+        length(skips)==skip_count || error("retained resource exclusion count differs")
+    end
+    figure,caption=_publish_technique_plot(row,rows,parameters,
+        provenance["total_cases"],figure_root;budget_skips=skips)
+    merge!(provenance,Dict(
+        "figure_sha256"=>_resume_sha(figure),"caption_sha256"=>_resume_sha(caption),
+        "plot_renderer"=>_ARTICLE_PLOT_RENDERER,
+        "figure_color_axis"=>_technique_plot_axes(rows,parameters)[1],
+        "figure_marker_axis"=>_technique_plot_axes(rows,parameters)[2]))
+    _resume_write(provenance_path,provenance)
+    (;summary_csv=summary,figure_pdf=figure,completed_cases=length(rows))
+end
+
+"""Rebuild all visible article figures from validated archived cases or their
+verified retained reports, without running an experiment.
+"""
 function refresh_technique_article(output;ids=String[],
         processed_root=DrWatson.datadir(joinpath(dirname(@__DIR__),"data","processed","garamonbench","techniques")),
         figure_root=_article_plotsdir("garamonbench","techniques","qualified"),
@@ -344,6 +483,14 @@ function refresh_technique_article(output;ids=String[],
         config=technique_bench_config(row;benchmark_root=root)
         result=_refresh_technique_benchmark_article(row,config,archive;
             processed_root,figure_root,compile_article=false)
+        isnothing(result) || push!(refreshed,(;id=row["id"],result...))
+    end
+    updated=Set(result.id for result in refreshed)
+    # Figures can outlive the campaign that generated them. LaTeX must never
+    # silently include such a file without regenerating its plot and caption.
+    for row in rows
+        row["id"] in updated && continue
+        result=_refresh_retained_technique_figure(row,processed_root,figure_root)
         isnothing(result) || push!(refreshed,(;id=row["id"],result...))
     end
     source=joinpath(root,"papers","Garamon_research_article_2026-09-27_en.tex")
@@ -404,7 +551,13 @@ function _bench_completed_rows(config,benchmark_output)
     rows
 end
 
-function _render_bench_plot_loaded(cairo,rows,plot_pdf)
+function _render_bench_plot_loaded(cairo,args...;kwargs...)
+    _with_article_theme(cairo) do
+        _draw_bench_plot(cairo,args...;kwargs...)
+    end
+end
+
+function _draw_bench_plot(cairo,rows,plot_pdf)
     1<=length(rows)<=3 || error("EGA3 library chart requires 1–3 validated cases")
     all(row["dimension"]=="3" && row["horizon"]=="1024" for row in rows) ||
         error("EGA3 library chart received a different grid")
@@ -433,7 +586,13 @@ function _render_bench_plot_loaded(cairo,rows,plot_pdf)
     plot_pdf
 end
 
-function _render_preflight_card_loaded(cairo,row,plot_pdf)
+function _render_preflight_card_loaded(cairo,args...;kwargs...)
+    _with_article_theme(cairo) do
+        _draw_preflight_card(cairo,args...;kwargs...)
+    end
+end
+
+function _draw_preflight_card(cairo,row,plot_pdf)
     case=row["case"]
     figure=cairo.Figure(size=(840,240),backgroundcolor=:white,fontsize=18)
     axis=cairo.Axis(figure[1,1],
@@ -515,17 +674,22 @@ function _compile_bench_article(tex_source,plot_dir,paper_dir;
     publish_canonical::Bool=true)
     compiler=Sys.which("latexmk")
     isnothing(compiler) && error("latexmk is required to compile the article after benchmarking")
+    tex_source=abspath(tex_source)
+    plot_dir=abspath(plot_dir)
+    paper_dir=abspath(paper_dir)
     isfile(tex_source) || error("Garamon article source is missing")
     mkpath(paper_dir)
     pdf=joinpath(paper_dir,splitext(basename(tex_source))[1]*".pdf")
     mktempdir() do auxiliary
         isolated_output=joinpath(auxiliary,"pdf")
         mkpath(isolated_output)
+        staged_source=joinpath(auxiliary,basename(tex_source))
+        cp(tex_source,staged_source)
         preflight=_article_plotsdir("garamonbench","techniques","preflight")
         qualified=_article_plotsdir("garamonbench","techniques","qualified")
-        texinputs=join((plot_dir,qualified,preflight,dirname(tex_source),
-            get(ENV,"TEXINPUTS","")),':')*":"
-        command=`$compiler -pdf -silent -interaction=nonstopmode -halt-on-error -auxdir=$auxiliary -outdir=$isolated_output $tex_source`
+        texinputs=join((plot_dir,qualified,preflight,dirname(tex_source)),':')*":"
+        command=Cmd(`$compiler -pdf -silent -interaction=nonstopmode -halt-on-error -auxdir=$auxiliary -outdir=$isolated_output $staged_source`;
+            dir=auxiliary)
         logfile=joinpath(auxiliary,"latexmk.log")
         open(logfile,"w") do io
             try
@@ -538,6 +702,11 @@ function _compile_bench_article(tex_source,plot_dir,paper_dir;
         end
         built=joinpath(isolated_output,basename(pdf))
         isfile(built) && filesize(built)>0 || error("LaTeX did not produce the article PDF")
+        fonts_tool=Sys.which("pdffonts")
+        if !isnothing(fonts_tool) &&
+                occursin("xkcd",lowercase(read(`$fonts_tool $built`,String)))
+            error("The rebuilt article still contains an XKCD figure. Publication stopped; the existing PDF and measurement data were kept.")
+        end
         _publish_article_pdf(built,pdf)
         canonical=joinpath(dirname(tex_source),basename(pdf))
         publish_canonical && abspath(pdf)!=abspath(canonical) &&

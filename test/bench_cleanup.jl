@@ -176,6 +176,33 @@ end
         provenance=TOML.parsefile(joinpath(dirname(report.summary_csv),"provenance.toml"))
         @test provenance["total_cases"]==3 && provenance["completed_cases"]==2
         @test provenance["campaign_status"]=="running"
+        # A retained plot can belong to a previous campaign. Its archived
+        # paired measurements must be reused even when the current campaign
+        # has no cases for that technique.
+        original_summary=read(report.summary_csv)
+        parameters_file=joinpath(dirname(report.summary_csv),"case_parameters.toml")
+        original_parameters=read(parameters_file)
+        write(report.figure_pdf,"legacy plot to regenerate")
+        provenance["figure_sha256"]=GaramonBench._resume_sha(report.figure_pdf)
+        GaramonBench._resume_write(joinpath(dirname(report.summary_csv),"provenance.toml"),provenance)
+        rm(caption_path)
+        rebuilt=refresh_technique_article(joinpath(root,"other-campaign");
+            ids=["16"],processed_root=joinpath(root,"processed"),
+            figure_root=joinpath(root,"plots"),paper_root=joinpath(root,"paper"),
+            publish_canonical=false)
+        @test getproperty.(rebuilt.figures,:id)==["28"]
+        @test startswith(read(report.figure_pdf,String),"%PDF-")
+        @test isfile(caption_path)
+        @test read(report.summary_csv)==original_summary
+        @test read(parameters_file)==original_parameters
+        write(report.summary_csv,"changed summary")
+        @test_throws ErrorException GaramonBench._refresh_retained_technique_figure(
+            row,joinpath(root,"processed"),joinpath(root,"plots"))
+        write(report.summary_csv,original_summary)
+        orphan=Dict("id"=>"16","name"=>"orphan")
+        write(joinpath(root,"plots","plot_technique_16.pdf"),"untraceable legacy plot")
+        @test_throws ErrorException GaramonBench._refresh_retained_technique_figure(
+            orphan,joinpath(root,"processed"),joinpath(root,"plots"))
         config["campaign"]["condition"]="exploratory_interference"
         @test_throws ErrorException GaramonBench._technique_report_rows(row,config,archive)
         config["campaign"]["condition"]="isolated"
@@ -226,6 +253,57 @@ end
     low,high,marker_y=GaramonBench._technique_ratio_limits(wide;
         has_exclusions=true)
     @test low<0.03 && high>14 && 14<marker_y<high
+end
+
+@testset "article rendering overrides an inherited XKCD theme" begin
+    @eval import CairoMakie
+    cairo=CairoMakie
+    previous=cairo.Makie.current_default_theme()
+    try
+        @eval import XKCDMakie
+        cairo.set_theme!(XKCDMakie.theme_xkcd())
+        mktempdir() do directory
+            parameters=Dict("a"=>Dict("structure"=>"shared"),
+                "b"=>Dict("structure"=>"distinct"))
+            rows=[(case_id="a",dimension=3,time_ratio=0.6),
+                (case_id="b",dimension=4,time_ratio=1.2)]
+            figure=joinpath(directory,"plot.pdf")
+            GaramonBench._render_technique_plot_loaded(cairo,
+                Dict("id"=>"16","name"=>"DAG"),rows,parameters,2,figure)
+            @test cairo.Makie.current_default_theme()[:xkcd_enabled][]==true
+            fonts_tool=Sys.which("pdffonts")
+            if isnothing(fonts_tool)
+                @test_skip false
+            else
+                @test !occursin("xkcd",lowercase(read(`$fonts_tool $figure`,String)))
+            end
+            if !isnothing(Sys.which("latexmk")) && !isnothing(fonts_tool)
+                legacy=joinpath(directory,"legacy.pdf")
+                GaramonBench._draw_technique_plot(cairo,
+                    Dict("id"=>"16","name"=>"DAG"),rows,parameters,2,legacy)
+                @test occursin("xkcd",lowercase(read(`$fonts_tool $legacy`,String)))
+                source=joinpath(directory,"article.tex")
+                write(source,"\\documentclass{article}\\usepackage{graphicx}\\begin{document}\\includegraphics[width=5cm]{plot.pdf}\\end{document}")
+                # A stale plot in the caller's directory must not shadow the
+                # freshly generated file passed through the figure directory.
+                figures=joinpath(directory,"fresh");mkpath(figures)
+                cp(figure,joinpath(figures,"plot.pdf"))
+                cp(legacy,figure;force=true)
+                pdf=cd(directory) do
+                    GaramonBench._compile_bench_article(source,figures,
+                        joinpath(directory,"paper");publish_canonical=false)
+                end
+                @test !occursin("xkcd",lowercase(read(`$fonts_tool $pdf`,String)))
+                published=read(pdf)
+                cp(legacy,joinpath(figures,"plot.pdf");force=true)
+                @test_throws ErrorException GaramonBench._compile_bench_article(
+                    source,figures,joinpath(directory,"paper");publish_canonical=false)
+                @test read(pdf)==published
+            end
+        end
+    finally
+        cairo.set_theme!(previous)
+    end
 end
 
 @testset "concurrent article builds publish complete PDFs" begin

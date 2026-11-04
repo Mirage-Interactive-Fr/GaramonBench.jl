@@ -45,6 +45,8 @@ using DrWatson
 @quickactivate "GaramonBench"
 DrWatson.projectname()=="GaramonBench" || error("Unexpected benchmark project")
 using GaramonBench
+samefile(pkgdir(GaramonBench),normpath(joinpath(@__DIR__,".."))) ||
+    error("This launcher loaded GaramonBench from a different checkout: "*pkgdir(GaramonBench))
 
 destination=isnothing(settings.output) ? DrWatson.datadir("garamonbench","techniques-dedicated-001") : settings.output
 println("Project: ",Base.active_project())
@@ -53,6 +55,7 @@ if settings.phase==:refresh_article
     result=refresh_technique_article(destination;ids=settings.ids)
     println("Article: ",result.article_pdf,
         "; measured figures rebuilt: ",length(result.figures))
+    println("Rebuilt technique IDs: ",join(sort!(getproperty.(result.figures,:id)),", "))
 else
     run_technique_campaign(destination;ids=settings.ids,gpu=settings.gpu,
         phase=settings.phase,allow_source_changes=settings.allow_source_changes,
