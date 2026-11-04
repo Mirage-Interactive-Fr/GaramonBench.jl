@@ -148,64 +148,114 @@ end
 _technique_plot_value(parameters,id,key)=isempty(key) ? "" :
     string(get(parameters[id],key,""))
 
-function _render_technique_plot_loaded(xkcd,row,rows,parameters,total,destination;
+const _TECHNIQUE_PLOT_TITLES=Dict(
+    "01"=>"Dense versus sparse complete product",
+    "02"=>"Two direct sparse-vector entry points",
+    "03"=>"Prepared versus direct wedge",
+    "04"=>"Selected outputs of a three-factor product",
+    "05"=>"Selected left-contraction coefficients",
+    "06"=>"Selected geometric-product coefficients",
+    "07"=>"Three-input selected-output join",
+    "08"=>"Prepared versus direct vector product",
+    "09"=>"Reused workspace versus direct vector product",
+    "10"=>"LRU cache versus uncached products",
+    "11"=>"Roulette cache versus uncached products",
+    "12"=>"TinyLFU cache versus uncached products",
+    "13"=>"SIEVE cache versus uncached products",
+    "14"=>"Generated versus direct vector product",
+    "15"=>"Known and untrained catalogue requests",
+    "16"=>"Shared versus distinct expression graph")
+
+function _technique_ratio_limits(rows;has_exclusions=false)
+    ratios=[r.time_ratio for r in rows]
+    all(ratio->isfinite(ratio) && ratio>0,ratios) ||
+        error("a qualified technique ratio is not positive and finite")
+    low=min(minimum(ratios),1.0)
+    high=max(maximum(ratios),1.0)
+    span=max(log10(high)-log10(low),0.4)
+    pad=max(0.12span,0.08)
+    lower=10.0^(log10(low)-pad)
+    upper=10.0^(log10(high)+pad*(has_exclusions ? 1.8 : 1.0))
+    exclusion_y=has_exclusions ? 10.0^(log10(high)+0.8pad) : nothing
+    lower,upper,exclusion_y
+end
+
+function _technique_ratio_ticks(lower,upper)
+    values=sort!([factor*10.0^exponent
+        for exponent in floor(Int,log10(lower)):ceil(Int,log10(upper)),
+            factor in (1.0,2.0,5.0)
+        if lower<=factor*10.0^exponent<=upper])
+    if length(values)>8
+        values=filter(value->isapprox(log10(value),round(log10(value));atol=1e-9),
+            values)
+    end
+    values,[string(round(value;sigdigits=3))*"×" for value in values]
+end
+
+function _render_technique_plot_loaded(cairo,row,rows,parameters,total,destination;
                                        budget_skips=NamedTuple[])
     isempty(rows) && error("no qualified technique cases to plot")
+    lower,upper,exclusion_y=_technique_ratio_limits(rows;
+        has_exclusions=!isempty(budget_skips))
+    ratio_ticks=_technique_ratio_ticks(lower,upper)
     color_key,marker_key=_technique_plot_axes(rows,parameters)
     colored=isempty(color_key) ? [""] :
         sort!(unique(_technique_plot_value(parameters,r.case_id,color_key) for r in rows))
     marked=isempty(marker_key) ? [""] :
         sort!(unique(_technique_plot_value(parameters,r.case_id,marker_key) for r in rows))
-    colors=[:steelblue3,:darkorange2,:seagreen3,:purple3,:goldenrod3,:slategray3]
-    markers=[:circle,:rect,:diamond,:star5]
-    xkcd.with_theme(xkcd.theme_xkcd()) do
-        figure=xkcd.Figure(size=(1200,610),backgroundcolor=:white)
-        axis=xkcd.Axis(figure[1,1],
-            title=row["id"]*" "*row["name"]*" — "*string(length(rows))*"/"*string(total)*" qualified cases",
-            xlabel="Algebra dimension",ylabel="Warm time / same-input Garamon.jl baseline",
-            yscale=log10,xticklabelsize=17,yticklabelsize=17,
-            xlabelsize=19,ylabelsize=19,titlesize=20)
-        for (color_index,color_value) in enumerate(colored),
-            (marker_index,marker_value) in enumerate(marked)
-            points=filter(r->isfinite(r.time_ratio) &&
-                _technique_plot_value(parameters,r.case_id,color_key)==color_value &&
-                _technique_plot_value(parameters,r.case_id,marker_key)==marker_value,rows)
-            isempty(points) && continue
-            ordinary=filter(r->!r.over_baseline_budget,points)
-            outside=filter(r->r.over_baseline_budget,points)
-            color=colors[color_index]
-            marker=markers[marker_index]
-            label=isempty(color_key) ? "Qualified scenarios" :
-                color_key*"="*color_value*
-                (isempty(marker_key) ? "" : "; "*marker_key*"="*marker_value)
-            # Small deterministic offsets expose points sharing a dimension.
-            group_index=(color_index-1)*length(marked)+marker_index
-            group_count=length(colored)*length(marked)
-            offset=group_count==1 ? 0.0 : 0.24*((group_index-1)/(group_count-1)-0.5)
-            isempty(ordinary) || xkcd.scatter!(axis,[r.dimension+offset for r in ordinary],
-                [clamp(r.time_ratio,1e-4,10) for r in ordinary];
-                color=(color,0.65),marker,markersize=10,label)
-            isempty(outside) || xkcd.scatter!(axis,[r.dimension+offset for r in outside],
-                fill(10.0,length(outside));color,marker=:utriangle,
-                markersize=13,label=isempty(ordinary) ? label : nothing)
-        end
-        xkcd.hlines!(axis,[1.0];color=:black,linestyle=:dash)
-        if !isempty(budget_skips)
-            xkcd.scatter!(axis,[r.dimension for r in budget_skips],fill(12.0,length(budget_skips));
-                color=:firebrick,marker=:xcross,markersize=14,
-                label="Resource exclusion (no timing)")
-        end
-        xkcd.hlines!(axis,[10.0];color=:firebrick,linestyle=:dot)
-        xkcd.ylims!(axis,1e-4,16)
-        xkcd.Legend(figure[1,2],axis,"Scenario categories";
-            tellheight=false,labelsize=18,titlesize=19)
-        xkcd.Label(figure[2,1:2],
-            "Color: "*_technique_axis_meaning(color_key)*
-            "; marker: "*_technique_axis_meaning(marker_key)*".\n"*
-            "Other parameters are in the case table. Horizontal offsets separate overlapping cases.\n"*
-            "Triangles: >10× baseline. Red crosses: budget exclusions, not ratios. Ratios below 10⁻⁴ are clipped.",fontsize=16)
-        xkcd.save(destination,figure)
+    colors=["#0072B2","#D55E00","#009E73","#88419D","#B58900","#505F6D"]
+    markers=[:circle,:rect,:diamond,:utriangle]
+    figure=cairo.Figure(size=(1200,610),backgroundcolor=:white,fontsize=18)
+    axis=cairo.Axis(figure[1,1],
+        title=row["id"]*" "*get(_TECHNIQUE_PLOT_TITLES,row["id"],row["name"])*
+            " — "*string(length(rows))*"/"*string(total)*" qualified cases",
+        xlabel="Algebra dimension",ylabel="Warm time / same-input Garamon.jl baseline",
+        yscale=log10,yticks=ratio_ticks,xticklabelsize=17,yticklabelsize=17,
+        xlabelsize=19,ylabelsize=19,titlesize=20,
+        xgridvisible=false,ygridvisible=true,
+        ygridcolor=(:gray,0.16),topspinevisible=false,rightspinevisible=false)
+    dimensions=sort!(unique(r.dimension for r in rows))
+    length(dimensions)<=10 && (axis.xticks[]=dimensions)
+    for (color_index,color_value) in enumerate(colored),
+        (marker_index,marker_value) in enumerate(marked)
+        points=filter(r->_technique_plot_value(parameters,r.case_id,color_key)==color_value &&
+            _technique_plot_value(parameters,r.case_id,marker_key)==marker_value,rows)
+        isempty(points) && continue
+        color=colors[color_index]
+        marker=markers[marker_index]
+        label=isempty(color_key) ? "Qualified cases" :
+            color_key*"="*color_value*
+            (isempty(marker_key) ? "" : "; "*marker_key*"="*marker_value)
+        # Small deterministic offsets expose points sharing a dimension.
+        group_index=(color_index-1)*length(marked)+marker_index
+        group_count=length(colored)*length(marked)
+        offset=group_count==1 ? 0.0 : 0.24*((group_index-1)/(group_count-1)-0.5)
+        cairo.scatter!(axis,[r.dimension+offset for r in points],
+            [r.time_ratio for r in points];
+            color,marker,markersize=11,strokecolor=:white,strokewidth=0.7,label)
     end
+    cairo.hlines!(axis,[1.0];color=:black,linestyle=:dash,linewidth=1.5)
+    if any(r->r.time_ratio>10,rows)
+        cairo.hlines!(axis,[10.0];color="#B52A2A",linestyle=:dot,linewidth=1.5)
+    end
+    if !isempty(budget_skips)
+        cairo.scatter!(axis,[r.dimension for r in budget_skips],
+            fill(exclusion_y,length(budget_skips));
+            color="#B52A2A",marker=:xcross,markersize=15,
+            label="Resource exclusion (no timing)")
+    end
+    cairo.ylims!(axis,lower,upper)
+    cairo.Legend(figure[1,2],axis,"Scenario categories";
+        tellheight=false,labelsize=17,titlesize=18,framevisible=false)
+    note="Color: "*_technique_axis_meaning(color_key)*
+        "; marker: "*_technique_axis_meaning(marker_key)*".\n"*
+        "Horizontal offsets separate overlapping cases. Dashed line: equal time."
+    any(r->r.time_ratio>10,rows) &&
+        (note*=" Red dotted line: 10× review threshold.")
+    !isempty(budget_skips) &&
+        (note*=" Red crosses at the chart top: resource exclusions, not ratios.")
+    cairo.Label(figure[2,1:2],note;fontsize=16)
+    cairo.save(destination,figure)
     destination
 end
 
@@ -245,18 +295,11 @@ function _refresh_technique_benchmark_article(row,config,archive;
     figure=joinpath(figure_root,"plot_technique_"*row["id"]*".pdf")
     @eval import CairoMakie
     cairo=Base.invokelatest(getfield,@__MODULE__,:CairoMakie)
-    previous=Base.invokelatest(cairo.Makie.current_default_theme)
-    @eval import XKCDMakie
-    xkcd=Base.invokelatest(getfield,@__MODULE__,:XKCDMakie)
-    try
-        mktempdir() do temporary
-            built=joinpath(temporary,"plot.pdf")
-            Base.invokelatest(_render_technique_plot_loaded,xkcd,row,rows,parameters,
-                length(expand_cases(config)),built;budget_skips)
-            _publish_article_pdf(built,figure)
-        end
-    finally
-        Base.invokelatest(cairo.Makie.set_theme!,previous)
+    mktempdir() do temporary
+        built=joinpath(temporary,"plot.pdf")
+        Base.invokelatest(_render_technique_plot_loaded,cairo,row,rows,parameters,
+            length(expand_cases(config)),built;budget_skips)
+        _publish_article_pdf(built,figure)
     end
     caption=joinpath(figure_root,"plot_technique_"*row["id"]*"_caption.tex")
     _publish_article_text(_technique_caption_text(rows,parameters,length(cases)),caption)
@@ -361,7 +404,7 @@ function _bench_completed_rows(config,benchmark_output)
     rows
 end
 
-function _render_bench_plot_loaded(xkcd,rows,plot_pdf)
+function _render_bench_plot_loaded(cairo,rows,plot_pdf)
     1<=length(rows)<=3 || error("EGA3 library chart requires 1–3 validated cases")
     all(row["dimension"]=="3" && row["horizon"]=="1024" for row in rows) ||
         error("EGA3 library chart received a different grid")
@@ -371,54 +414,46 @@ function _render_bench_plot_loaded(xkcd,rows,plot_pdf)
         error("duplicate EGA3 library")
     labels=[names[row["library"]] for row in rows]
     medians=[parse(Float64,row["median_ns"])/1e3 for row in rows]
-    noise=xkcd.scale(xkcd.opensimplex2_2d(seed=UInt64(20260929)),3e0)*0.2+
-        xkcd.scale(xkcd.opensimplex2_2d(seed=UInt64(20260930)),1e1)*0.4+
-        xkcd.scale(xkcd.opensimplex2_2d(seed=UInt64(20260931)),1e2)*0.8
-    style=xkcd.theme_xkcd(noise_generator=noise)
-    xkcd.with_theme(style) do
-        figure=xkcd.Figure(size=(800,460),backgroundcolor=:white)
-        axis=xkcd.Axis(figure[1,1],
-            title="EGA3: 1,024 products ("*string(length(rows))*"/3 validated routes)",
-            xlabel="Median time per batch (microseconds)",
-            yticks=(1:length(rows),labels),ygridvisible=false,xgridvisible=true)
-        xkcd.barplot!(axis,1:length(rows),medians;direction=:x,
-            color=[:steelblue3,:darkorange2,:seagreen3][1:length(rows)],
-            strokecolor=:black,strokewidth=1)
-        xkcd.xlims!(axis,0,maximum(medians)*1.27)
-        xkcd.ylims!(axis,0.5,length(rows)+0.5)
-        for (index,value) in enumerate(medians)
-            xkcd.text!(axis,value+maximum(medians)*0.02,index;
-                text=string(round(value;digits=2)),align=(:left,:center),fontsize=20)
-        end
-        xkcd.save(plot_pdf,figure)
+    figure=cairo.Figure(size=(800,460),backgroundcolor=:white,fontsize=18)
+    axis=cairo.Axis(figure[1,1],
+        title="EGA3: 1,024 products ("*string(length(rows))*"/3 validated routes)",
+        xlabel="Median time per batch (microseconds)",
+        yticks=(1:length(rows),labels),ygridvisible=false,xgridvisible=true,
+        topspinevisible=false,rightspinevisible=false)
+    cairo.barplot!(axis,1:length(rows),medians;direction=:x,
+        color=["#0072B2","#D55E00","#009E73"][1:length(rows)])
+    cairo.xlims!(axis,0,maximum(medians)*1.27)
+    cairo.ylims!(axis,0.5,length(rows)+0.5)
+    for (index,value) in enumerate(medians)
+        cairo.text!(axis,value+maximum(medians)*0.02,index;
+            text=string(round(value;digits=2)),align=(:left,:center),fontsize=20)
     end
+    cairo.save(plot_pdf,figure)
     isfile(plot_pdf) && filesize(plot_pdf)>0 || error("Makie did not produce a PDF")
     plot_pdf
 end
 
-function _render_preflight_card_loaded(xkcd,row,plot_pdf)
+function _render_preflight_card_loaded(cairo,row,plot_pdf)
     case=row["case"]
-    style=xkcd.theme_xkcd()
-    xkcd.with_theme(style) do
-        figure=xkcd.Figure(size=(840,240),backgroundcolor=:white)
-        axis=xkcd.Axis(figure[1,1],
-            title="Preflight validation — "*row["id"]*" "*row["name"])
-        xkcd.hidedecorations!(axis)
-        xkcd.hidespines!(axis)
-        xkcd.xlims!(axis,0,1)
-        xkcd.ylims!(axis,0,1)
-        details=join((string(key)*"="*string(case[key]) for key in
-            ("dimension","signature","horizon","operation","mode")
-            if haskey(case,key)),"   ")
-        xkcd.text!(axis,0.05,0.72;
-            text="Declared oracle: PASSED",fontsize=25,align=(:left,:center))
-        xkcd.text!(axis,0.05,0.45;
-            text=details,fontsize=18,align=(:left,:center))
-        xkcd.text!(axis,0.05,0.17;
-            text="One representative case. No timing or speed ranking.",
-            fontsize=17,align=(:left,:center))
-        xkcd.save(plot_pdf,figure)
-    end
+    figure=cairo.Figure(size=(840,240),backgroundcolor=:white,fontsize=18)
+    axis=cairo.Axis(figure[1,1],
+        title="Preflight validation — "*row["id"]*" "*row["name"])
+    cairo.hidedecorations!(axis)
+    cairo.hidespines!(axis)
+    cairo.xlims!(axis,0,1)
+    cairo.ylims!(axis,0,1)
+    details=join((string(key)*"="*string(case[key]) for key in
+        ("dimension","signature","horizon","operation","mode")
+        if haskey(case,key)),"   ")
+    cairo.text!(axis,0.05,0.72;
+        text="Independent oracle: passed",fontsize=25,align=(:left,:center),
+        color="#164A6E")
+    cairo.text!(axis,0.05,0.45;
+        text=details,fontsize=18,align=(:left,:center))
+    cairo.text!(axis,0.05,0.17;
+        text="One representative case. No timing or speed ranking.",
+        fontsize=17,align=(:left,:center),color="#505F6D")
+    cairo.save(plot_pdf,figure)
     isfile(plot_pdf) && filesize(plot_pdf)>0 || error("preflight card was not rendered")
     plot_pdf
 end
@@ -432,14 +467,7 @@ function _refresh_technique_preflight_article(row,preflight)
     mkpath(figure_dir)
     @eval import CairoMakie
     cairo=Base.invokelatest(getfield,@__MODULE__,:CairoMakie)
-    previous=Base.invokelatest(cairo.Makie.current_default_theme)
-    @eval import XKCDMakie
-    xkcd=Base.invokelatest(getfield,@__MODULE__,:XKCDMakie)
-    try
-        Base.invokelatest(_render_preflight_card_loaded,xkcd,row,figure)
-    finally
-        Base.invokelatest(cairo.Makie.set_theme!,previous)
-    end
+    Base.invokelatest(_render_preflight_card_loaded,cairo,row,figure)
     source=joinpath(dirname(@__DIR__),"papers",
         "Garamon_research_article_2026-09-27_en.tex")
     _compile_bench_article(source,figure_dir,paper_dir)
@@ -449,14 +477,7 @@ function _render_bench_plot(rows::AbstractVector,plot_pdf)
     mkpath(dirname(plot_pdf))
     @eval import CairoMakie
     cairo=Base.invokelatest(getfield,@__MODULE__,:CairoMakie)
-    previous=Base.invokelatest(cairo.Makie.current_default_theme)
-    @eval import XKCDMakie
-    xkcd=Base.invokelatest(getfield,@__MODULE__,:XKCDMakie)
-    try
-        Base.invokelatest(_render_bench_plot_loaded,xkcd,rows,plot_pdf)
-    finally
-        Base.invokelatest(cairo.Makie.set_theme!,previous)
-    end
+    Base.invokelatest(_render_bench_plot_loaded,cairo,rows,plot_pdf)
 end
 
 _render_bench_plot(summary_csv::AbstractString,plot_pdf)=

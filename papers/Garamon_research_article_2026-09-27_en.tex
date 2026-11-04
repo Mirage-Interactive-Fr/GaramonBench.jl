@@ -8,19 +8,24 @@
 \usepackage{booktabs,longtable,tabularx,array}
 \usepackage{graphicx}
 \usepackage{float}
+\usepackage{placeins}
 \usepackage{microtype}
 \usepackage[margin=23mm]{geometry}
 \usepackage[colorlinks=true,urlcolor=blue,linkcolor=blue,citecolor=blue]{hyperref}
+\makeatletter
+\setlength{\@fptop}{0pt}
+\makeatother
 \Urlmuskip=0mu plus 1mu\relax
 \emergencystretch=1.5em
 \newcommand{\Cl}{\mathrm{Cl}}
 \newcommand{\supp}{\operatorname{supp}}
 \newcommand{\code}[1]{\texttt{#1}}
-% Every panel links back to the passage which defines its actual comparison.
-\newcommand{\techniqueintro}[1]{\phantomsection\label{explain:technique-#1}\ref{fig:technique-#1}}
-\newcommand{\techniqueguide}[2]{%
-\par\medskip\noindent\phantomsection\label{explain:technique-#1}%
-\textbf{Figure~\ref{fig:technique-#1}: #2.}\enspace}
+% The same technique explanation is visible beside the figure and in its caption.
+\newcommand{\techniqueanchor}[1]{\phantomsection\label{explain:technique-#1}}
+\newcommand{\techniqueguide}[3]{%
+\expandafter\gdef\csname techniqueexplain#1\endcsname{#3}%
+\par\medskip\noindent\techniqueanchor{#1}%
+\textbf{#2.}\enspace #3\par}
 \newcommand{\techniquebacklink}[1]{%
 \hyperref[explain:technique-#1]{Explanation on p.~\pageref*{explain:technique-#1}}.}
 \newcommand{\pendingfigure}[4]{%
@@ -30,35 +35,41 @@
 \fbox{\parbox[c][18mm][c]{.84\linewidth}{\centering
 \textbf{Awaiting dedicated benchmark data}\\[2mm]
 \small #2}}}
-\caption[#2]{\textbf{#2} #3}
+\caption[#2]{\textbf{#2} #3
+\hyperref[explain:#4]{Explanation on p.~\pageref*{explain:#4}}.}
 \label{#4}
-\end{figure}}
-\newcommand{\techniqueplot}[3]{%
+\end{figure}\FloatBarrier}
+\newcommand{\techniqueplot}[2]{%
 \begin{figure}[!thp]
 \centering
 \IfFileExists{plot_technique_#1.pdf}{%
 \includegraphics[width=\linewidth]{plot_technique_#1.pdf}}{%
 \IfFileExists{preflight_technique_#1.pdf}{%
-\includegraphics[width=.88\linewidth]{preflight_technique_#1.pdf}}{%
 \fbox{\parbox[c][18mm][c]{.84\linewidth}{\centering
-\textbf{Awaiting dedicated benchmark data}\\[2mm]
+\textbf{One independent oracle case passed}\\[2mm]
+\small No qualified timing is shown in this slot.}}}{%
+\fbox{\parbox[c][18mm][c]{.84\linewidth}{\centering
+\textbf{Figure file unavailable in this build}\\[2mm]
 \small #2}}}}
 \IfFileExists{plot_technique_#1.pdf}{%
 \IfFileExists{plot_technique_#1_caption.tex}{%
-\caption[#2]{\textbf{#2.} \input{plot_technique_#1_caption.tex}
-\techniquebacklink{#1} \textit{Further measurements proposed: #3}}}{%
-\caption[#2]{\textbf{#2.} The current panel reports the qualified warm-time
+\caption[#2]{\textbf{#2.} \csname techniqueexplain#1\endcsname\space
+\input{plot_technique_#1_caption.tex}
+\techniquebacklink{#1}}}{%
+\caption[#2]{\textbf{#2.} \csname techniqueexplain#1\endcsname\space
+The current panel reports the qualified warm-time
 ratio to standard Garamon.jl on the same input. The legend identifies the
 measured scenario categories; preparation, memory, and full-episode costs
 are separate measurements. \techniquebacklink{#1}}}}{%
 \IfFileExists{preflight_technique_#1.pdf}{%
-\caption[#2]{\textbf{#2.} The displayed card verifies one oracle case;
-it reports no performance measurement. \techniquebacklink{#1}
-Planned comparison: #3}}{%
-\caption[#2]{\textbf{#2.} No qualified measurement is available yet.
-\techniquebacklink{#1} Planned comparison: #3}}}
+\caption[#2]{\textbf{#2.} \csname techniqueexplain#1\endcsname\space
+The displayed card verifies one oracle case;
+it reports no performance measurement. \techniquebacklink{#1}}}{%
+\caption[#2]{\textbf{#2.} \csname techniqueexplain#1\endcsname\space
+No plot file for this technique is installed in this build.
+\techniquebacklink{#1}}}}
 \label{fig:technique-#1}
-\end{figure}}
+\end{figure}\FloatBarrier}
 \title{Toward Workload-Aware Geometric Algebra in Garamon.jl:\\
 Algorithms, Exactness Contracts, and a Reproducible Benchmark Protocol}
 \author{}
@@ -66,6 +77,13 @@ Algorithms, Exactness Contracts, and a Reproducible Benchmark Protocol}
 
 \begin{document}
 \maketitle
+\ifdefined\localpreview
+\noindent\fbox{\parbox{.95\linewidth}{\textbf{Local layout preview.}
+The qualified plot files and experiment archive are on the campaign
+machine. This PDF shows the revised explanations, figure captions,
+links, and placement; empty figure slots are not new results.}}
+\par\medskip
+\fi
 
 \begin{abstract}
 The cost of geometric algebra computation depends on the requested output,
@@ -223,20 +241,29 @@ relative execution speed.}
 \label{tab:design}
 \end{table}
 
-Figure~\ref{fig:matched} reserves the matched C++/Julia comparison,
-while Figure~\ref{fig:external-ga} reserves the separate comparison
+\phantomsection\label{explain:fig:matched}Figure~\ref{fig:matched}
+reserves the matched C++/Julia comparison, while
+\phantomsection\label{explain:fig:external-ga}Figure~\ref{fig:external-ga}
+reserves the separate comparison
 with other GA libraries. Neither slot represents a completed
 cross-library measurement in this article.
 
 \pendingfigure{plot_cpp_julia_matched.pdf}
 {Matched C++ and Julia routes.}
-{The matched campaign will separate preparation, compilation, and
-equivalent execution contracts.}{fig:matched}
+{Purpose: compare the Garamon C++ generator and Garamon.jl on identical
+geometric-algebra requests and complete owned outputs. Dimensions, input
+support, metric, and reuse horizon must be matched before a speed ratio is
+defined. Preparation and generated-code compilation are recorded separately
+from warm execution and the full episode. This slot has no qualified
+cross-language measurement yet.}{fig:matched}
 
 \pendingfigure{qualified_ega3_vector_libraries.pdf}
 {EGA3 vector products across GA libraries.}
-{The dedicated \code{bench()} campaign will compare identical seeded
-requests in Garamon.jl, GAL, and Versor.}{fig:external-ga}
+{Purpose: compare complete EGA3 vector products on the same seeded 1,024
+request episode in Garamon.jl, GAL, and Versor, with the same output
+contract. The reported quantity will be median time per batch; preparation,
+conversion, and version/implementation differences need separate context.
+This slot does not currently rank the libraries.}{fig:external-ga}
 
 \section{Workloads that must not be conflated}
 A measurement is meaningful only after the task and ownership of its
@@ -341,8 +368,9 @@ contexts: \code{scan} cycles through four contexts, \code{phase}
 groups requests into four phases, and \code{shift} changes context
 every two requests. Each plotted ratio uses the standard Garamon.jl
 route on the same generated inputs. A ratio below one favors the
-candidate on warm time only; the black line marks equality and the
-red line marks ten times the baseline.
+candidate on warm time only; the black line marks equality. A red
+ten-times line appears only when at least one measured case crosses
+that local review threshold.
 
 Metric scenarios distinguish positive diagonal, mixed signature,
 degenerate, and general symmetric forms. An algorithm specialized to a
@@ -374,12 +402,14 @@ the number of nonzero coefficients. A point is one completed parameter
 combination, checked against an independent exact oracle before timing.
 Its vertical coordinate is the median warm execution time of the named
 route divided by the median warm time of its own same-input standard
-Garamon.jl route. One is equal time (black line); below one favors the
-named route for that warm call; the red dotted line at ten marks the
-campaign's local slow-route review threshold, not an error bound or a
-second library. A triangle at ten means the measured ratio exceeded
-the visible scale; a red cross denotes a resource exclusion with no
-timing result.
+Garamon.jl route. One is equal time (black dashed line); below one
+favors the named route for that warm call. The vertical scale follows
+the completed ratios; it is not fixed to a remote value such as
+\(10^{-4}\), and measured points are not clipped to a threshold.
+When a case exceeds ten times the baseline, a red dotted line at ten
+shows the campaign's local slow-route review threshold, not an error
+bound or a second library. A red cross at the chart top denotes a
+resource exclusion with no timing result.
 Color and marker shape encode only the categories explicitly named in
 each caption. Different parameter combinations can share a color and
 even the same plotted position; they are not averaged into a new
@@ -422,8 +452,7 @@ The three representation slots test dense storage
 standard routes. The first and third panels vary input structure;
 the second is a direct-route reference check, as explained below.
 
-\techniqueguide{01}{dense versus sparse storage on the same complete product}
-The candidate stores every coefficient slot of each operand and result;
+\techniqueguide{01}{Figure~\ref{fig:technique-01}: dense versus sparse storage on the same complete product}{The candidate stores every coefficient slot of each operand and result;
 the same-input baseline stores only occupied blades in sparse form.
 Both return a separately owned matrix of all \(2^n\) output
 coefficients. The \emph{basis} input support contains the scalar, each
@@ -437,11 +466,10 @@ qualified subset; metric signature is a further case variation even
 when its points share colors. The question is whether direct dense
 indexing outweighs its full \(2^n\) storage at each support pattern.
 The displayed ratio is only warm execution; conversion, memory, and
-full-episode cost require separate evidence.
-\techniqueplot{01}{Dense storage versus sparse storage}{Conversion, allocation, retained bytes, and complete-episode cost for the same outputs.}
+full-episode cost require separate evidence.}
+\techniqueplot{01}{Dense storage versus sparse storage}
 
-\techniqueguide{02}{sparse vector-product reference check}
-Both candidate and baseline here use sparse vector operands with the
+\techniqueguide{02}{Figure~\ref{fig:technique-02}: sparse vector-product reference check}{Both candidate and baseline here use sparse vector operands with the
 same \(n\) active grade-one blades; the candidate calls the ordinary
 product operator and the baseline calls the direct geometric-product
 function. These are two entry points to the standard Garamon.jl route,
@@ -452,11 +480,10 @@ an owned matrix. The grid uses \(n=2,\ldots,8,16,32,64,65,96,128\),
 shape distinguish horizon and signature in a sufficiently complete
 panel. A ratio near one is the expected consistency check; a strong
 departure would need investigation before using this panel as a
-performance claim. It cannot establish a sparse-storage advantage.
-\techniqueplot{02}{Sparse vector reference check}{A separate sparse-versus-dense experiment with matched supports and conversion costs.}
+performance claim. It cannot establish a sparse-storage advantage.}
+\techniqueplot{02}{Sparse vector reference check}
 
-\techniqueguide{03}{prepared grade-block wedge versus direct wedge}
-Both routes compute the exterior (wedge) product, so repeated basis
+\techniqueguide{03}{Figure~\ref{fig:technique-03}: prepared grade-block wedge versus direct wedge}{Both routes compute the exterior (wedge) product, so repeated basis
 directions vanish independently of the metric. The candidate prepares
 a plan for the two input grades; the baseline executes the direct
 wedge on the same sparse homogeneous operands. The \emph{one\_one}
@@ -470,8 +497,8 @@ three metric signatures. Color identifies grade pair and shape
 identifies horizon when represented; signature may be hidden by
 overlapping points. The current comparison does not vary wedge versus
 geometric versus contraction: operation is fixed to wedge. Warm time
-also leaves the one-time grade-plan preparation outside this panel.
-\techniqueplot{03}{Prepared grade-block wedge}{Other product operations, plan preparation, memory, and complete-episode cost.}
+also leaves the one-time grade-plan preparation outside this panel.}
+\techniqueplot{03}{Prepared grade-block wedge}
 
 Masks may fit a fixed machine integer, a wider fixed integer, or
 arbitrary precision storage. The mathematical blade is unchanged,
@@ -481,11 +508,12 @@ representation boundaries and compare identical supports; changing
 the corpus at a boundary would confound the effect of the mask type.
 A combinatorial rank is useful for a fixed grade only if the
 indexing table or arithmetic saves more than it costs.
-Figure~\techniqueintro{30} is the indexing experiment across
+Figure~\ref{fig:technique-30} is the indexing experiment across
 machine-word and wider-mask boundaries; its validation card alone
 cannot establish a lookup speedup.
 
-\techniqueplot{30}{Blade-mask indexing}{Construction and lookup across machine-word and wider-mask boundaries.}
+\techniqueguide{30}{Figure~\ref{fig:technique-30}: the cost of addressing a blade by its bit mask}{A blade mask records which basis directions occur in a term. This experiment asks whether a combinatorial index into fixed-grade storage saves lookup work compared with ordinary mask lookup on the same coefficients. It crosses dimensions 64/65 and 128/129, where mask storage changes from one machine word to a wider or arbitrary-precision integer; the planned grid spans dimensions 2--129 and reuse horizons 1/32. Construction cost, lookup time, memory, and the complete product episode must all be counted. The current card is one correctness check, not a measured speed comparison.}
+\techniqueplot{30}{Blade-mask indexing}
 
 \subsection{Factorization, active subspaces, and compact diagrams}
 A decomposable blade and a product of versors can remain factorized
@@ -503,13 +531,16 @@ coefficient signs. Every grade-two coefficient is requested. Its oracle
 uses coordinate reflections and minors; the ordinary-product baseline
 expands the blade and performs the complete ordered sandwich. Intermediate
 grades have an explicit expansion budget and are never discarded.
-Figures~\techniqueintro{17} and \techniqueintro{18} locate the
+Figures~\ref{fig:technique-17} and \ref{fig:technique-18} locate the
 factored-versor and certified active-subspace experiments. They ask
 whether saved expansion or ambient work repays certification and
 conversion over the specified request sequence.
 
-\techniqueplot{17}{Factored blades and versors}{Factor count, expansion, and complete transformation episodes.}
-\techniqueplot{18}{Active coordinate subspace}{Ambient versus active dimension, certification, embedding, and fallback.}
+\techniqueguide{17}{Figure~\ref{fig:technique-17}: applying reflections without expanding every intermediate blade}{The candidate keeps a decomposable bivector and its versor factors in factored form while applying a sequence of nonnull reflections. The direct baseline expands the blade and performs the same ordered sandwich products; both must return every grade-two coefficient. The planned grid varies dimension from 2 to 64, reflection count 1/2/4/8, horizon 1/8/32, and two seeded input streams. The question is whether avoided intermediate expansion pays for factor maintenance and final materialization. The displayed card checks one oracle case and contains no timing result.}
+\techniqueplot{17}{Factored blades and versors}
+
+\techniqueguide{18}{Figure~\ref{fig:technique-18}: computing inside a certified active coordinate subspace}{The candidate proves that the operands occupy fewer basis directions than the ambient algebra, computes there, and embeds the output back into the original coordinates. The baseline computes the same complete product in the ambient algebra. The registered grid uses ambient dimensions 4 and 65 and geometric or exterior product, so it crosses a mask-width boundary and compares two product contracts separately. Certification, basis conversion, embedding, and fallback costs belong to the candidate's episode. This card verifies one case only; it does not yet show a performance advantage.}
+\techniqueplot{18}{Active coordinate subspace}
 
 Tensor trains represent coefficient tensors with cores; they are
 exact only while the retained ranks and coefficients reproduce the
@@ -531,15 +562,22 @@ materialized-trie wedge uses the same complete reachable-output principle,
 with a 64-dimensional bound from its unsigned machine-word masks. Reuse
 horizons and input signs vary independently of ambient dimension.
 The exact tensor-train, weighted-diagram, materialized-trie, and
-adaptive-radix experiments occupy Figures~\techniqueintro{19},
-\techniqueintro{20}, \techniqueintro{21}, and
-\techniqueintro{43}. Each needs its own preparation and output
+adaptive-radix experiments occupy Figures~\ref{fig:technique-19},
+\ref{fig:technique-20}, \ref{fig:technique-21}, and
+\ref{fig:technique-43}. Each needs its own preparation and output
 expansion costs before a warm-time point can support an episode claim.
 
-\techniqueplot{19}{Exact tensor train}{Certified rank, contraction, reconstruction, and peak memory.}
-\techniqueplot{20}{Weighted zero-suppressed diagram}{Build time, shared nodes, exact product, and output expansion.}
-\techniqueplot{21}{Materialized trie}{Prefix sharing, build cost, update cost, and repeated lookups.}
-\techniqueplot{43}{Adaptive radix tree}{The same seeded support streams as the trie, including preparation.}
+\techniqueguide{19}{Figure~\ref{fig:technique-19}: exact tensor-train storage versus a complete product}{A tensor train stores a multivector's coefficient array as linked low-rank cores. The candidate contracts exact cores and reconstructs every requested output coefficient; the baseline computes the complete direct product on the same inputs. The grid uses dimensions 2--8, horizons 1/8/32, and two seeds. Its small dimensions allow independent enumeration of all blade pairs. The comparison must include core construction, certified rank, contraction, reconstruction, and peak storage. The current card establishes only a representative oracle pass; it gives no rank-dependent speed claim.}
+\techniqueplot{19}{Exact tensor train}
+
+\techniqueguide{20}{Figure~\ref{fig:technique-20}: sharing repeated support paths in a weighted diagram}{A weighted zero-suppressed diagram merges repeated branches of sparse blade supports while keeping their coefficients and Clifford signs. The candidate builds the diagram, performs the exact product, and expands all reachable output masks; the baseline performs the same sparse product directly. The planned grid varies ambient dimension from 4 to 128, horizon 1/8/32, and two seeds. The question is whether sharing saves enough repeated work to repay node construction, updates, and output expansion. The current card contains one correctness case and no qualified timing.}
+\techniqueplot{20}{Weighted zero-suppressed diagram}
+
+\techniqueguide{21}{Figure~\ref{fig:technique-21}: building a prefix trie for repeated sparse products}{A materialized trie groups blade masks by common prefixes so that repeated exterior-product lookups can reuse an index. The candidate pays to build and update the trie; the baseline runs the same exact sparse wedge directly and returns the same reachable coefficients. The planned grid varies dimension 6--64, horizon 1/8/32, and two seeds. The result must include trie memory, construction, lookups, updates, and owned output, since a fast lookup alone may not repay the index. The card is validation only, not a measured comparison.}
+\techniqueplot{21}{Materialized trie}
+
+\techniqueguide{43}{Figure~\ref{fig:technique-43}: adaptive radix indexing of changing sparse supports}{The candidate stores blade-mask prefixes in an adaptive radix tree for exact sparse wedge queries; the baseline uses the direct wedge on the same output contract. Unlike the materialized-trie test, this grid explicitly varies clustered versus spread supports, stable versus changing supports, index policy prebuilt versus rebuilt, metric signature, dimensions 2--129, and horizons 1/32/256. Those choices determine whether preparation can be reused and whether a compact prefix index helps at all. Build, maintenance, memory, and complete episode must be reported. The visible card verifies only one case.}
+\techniqueplot{43}{Adaptive radix tree}
 
 A matrix representation can recast selected products as matrix
 operations, but its validity depends on metric, representation, and
@@ -567,12 +605,14 @@ therefore represent these integer fixtures exactly. This bounded
 claim does not extend to arbitrary floating inputs or signatures.
 Conversion, matrix multiplication, inverse conversion, retained
 matrix bytes, and the baseline's output conversion are recorded.
-The figure remains provisional until isolated measurements qualify.
-Figure~\techniqueintro{22} records the split-signature matrix
+Figure~\ref{fig:technique-22} remains provisional until isolated
+measurements qualify.
+Figure~\ref{fig:technique-22} records the split-signature matrix
 transform route; the intended comparison includes both butterflies,
 matrix multiplication, and the same complete output as the direct route.
 
-\techniqueplot{22}{Clifford-matrix transform}{Split-signature forward transform, matrix product, inverse transform, retained bytes, and full-output baseline.}
+\techniqueguide{22}{Figure~\ref{fig:technique-22}: transforming an exact Clifford product into matrix multiplication}{The candidate uses a forward butterfly to turn the full coefficients of the split-signature algebra \(\Cl(r,r)\) into a \(2^r\)-square matrix, multiplies matrices, and applies the inverse butterfly. The baseline computes the same complete product directly in Garamon.jl. The planned grid uses even dimensions 2--20, 4/16/64 nonzero input masks, one fixed left operand or a pool of four, prebuilt or rebuilt preparation, and horizons 1/16/128. Conversion, matrix multiplication, inverse conversion, retained bytes, and output materialization all matter. The present figure is a single validation card, not a performance ranking.}
+\techniqueplot{22}{Clifford-matrix transform}
 
 \subsection{Binary rank and invariant sectors}
 Let \(S\) be the union of masks relevant to a diagonal-metric
@@ -605,14 +645,19 @@ compares prepared sectors with the direct exact route under the same
 independent signed-blade oracle. The underlying grading is standard
 Clifford-algebra structure~\cite{breuils2019}; no performance conclusion
 is drawn before the dedicated-machine measurements.
-The compact-mask rank test (Figure~\techniqueintro{31}), exact
-sector split (Figure~\techniqueintro{32}), and combined rank/workspace
-episode (Figure~\techniqueintro{K1}) have separate result slots
+The compact-mask rank test (Figure~\ref{fig:technique-31}), exact
+sector split (Figure~\ref{fig:technique-32}), and combined rank/workspace
+episode (Figure~\ref{fig:technique-K1}) have separate result slots
 because their certificates and retained storage differ.
 
-\techniqueplot{31}{Binary support rank}{Ambient dimension, compressed rank, cocycle preparation, and complete episode.}
-\techniqueplot{32}{Invariant sectors}{Certificate, sector products, recomposition, and exact fallback.}
-\techniqueplot{K1}{Compact rank and workspace combination}{Compact-rank workspace episodes and the ordinary full-product baseline across dimensions and reuse horizons.}
+\techniqueguide{31}{Figure~\ref{fig:technique-31}: compacting the binary span of active blade masks}{The candidate finds a basis of the input masks as vectors over \(\mathbb F_2\) and indexes their XOR combinations in that smaller coordinate space. It must carry the original blade-order sign, metric cocycle, grade, and output embedding exactly; the baseline uses the ordinary ambient-mask product on the same requested output. The grid varies dimensions 2--129, mixed or degenerate metric, horizon 1/8/32, and two seeds. The question is whether reduced indexing repays basis construction and conversion. The current card shows one correctness pass; it supplies no timing or rank crossover.}
+\techniqueplot{31}{Binary support rank}
+
+\techniqueguide{32}{Figure~\ref{fig:technique-32}: computing only the requested invariant parity sector}{For the grade involution, even and odd output sectors can be assembled from exact even/odd operand products. The candidate certifies the parity split and computes the requested sector, or recomposes both sectors when the full result is requested. The direct baseline computes the same output without this sector plan. The grid varies dimensions 2--129, requested parity all/even/odd, prepared/direct mode, stable/support-changing/metric-changing episodes, support size 2/3, positive/mixed/degenerate metric, and horizons 1/32/256. Certification, invalidation, fallback, and output recomposition must be charged. The card has no qualified speed result.}
+\techniqueplot{32}{Invariant sectors}
+
+\techniqueguide{K1}{Figure~\ref{fig:technique-K1}: combining compact-mask indexing with a reusable workspace}{This interaction test asks whether two individually useful optimizations still help when used together: compact the binary span of active masks, then keep its temporary product buffers in a workspace. The baseline executes the same full product through the ordinary Garamon.jl route. The planned grid varies dimension 3--129, horizons 2/8/32, and two seeds; it crosses machine-word mask boundaries. Preparation, conversion back to ambient masks, retained workspace memory, owned output, and the full episode belong in the comparison. The current card checks one case but cannot establish a combined speedup.}
+\techniqueplot{K1}{Compact rank and workspace combination}
 
 \section{Exact product paths and preparation}
 \subsection{Traversal, grade filtering, and joins}
@@ -630,8 +675,7 @@ whereas Figure~\ref{fig:technique-05} isolates exact grade pruning.
 The comparisons apply only to the requested outputs and operations
 declared for their respective campaigns.
 
-\techniqueguide{04}{recursive evaluation of selected triple-product coefficients}
-The requested result is five named coefficients of the ordered
+\techniqueguide{04}{Figure~\ref{fig:technique-04}: recursive evaluation of selected triple-product coefficients}{The requested result is five named coefficients of the ordered
 expression \((ab)c\), not its full multivector. The candidate prepares
 an expression tree and evaluates only those outputs using recursive
 traversal; the baseline computes the ordinary nested products and then
@@ -644,11 +688,10 @@ positive, mixed, or degenerate metric signature. Color and shape
 identify horizon and signature if enough cases have qualified. A
 faster warm point would say only that selected-output recursive
 evaluation beat full nested multiplication on that case; it would
-not establish lower plan-building or complete-episode cost.
-\techniqueplot{04}{Recursive selected coefficients}{Other support patterns, plan construction, and complete-episode cost.}
+not establish lower plan-building or complete-episode cost.}
+\techniqueplot{04}{Recursive selected coefficients}
 
-\techniqueguide{05}{exact left-contraction coefficient queries}
-This grid fixes the operator to \emph{left contraction}: only terms
+\techniqueguide{05}{Figure~\ref{fig:technique-05}: exact left-contraction coefficient queries}{This grid fixes the operator to \emph{left contraction}: only terms
 whose output grade equals right grade minus left grade are admissible.
 The candidate asks for eight specified output coefficients directly;
 the baseline computes the complete left contraction and extracts those
@@ -661,8 +704,8 @@ three metric signatures. The legend uses horizon and signature when
 the qualified subset contains them. The term \emph{exact filter}
 means a grade rule proves a term cannot contribute; it is not an
 approximate cutoff. A warm advantage must still be weighed against
-any preparation and the full episode.
-\techniqueplot{05}{Exact left-contraction queries}{Other operators, requested-output counts, preparation, and full-episode cost.}
+any preparation and the full episode.}
+\techniqueplot{05}{Exact left-contraction queries}
 
 For a selected output mask \(K\), an XOR join probes only compatible
 operand masks. For a selected coefficient of \((ab)c\), a three-way
@@ -677,8 +720,7 @@ Figures~\ref{fig:technique-06} and \ref{fig:technique-07}
 separate a two-input XOR lookup from a three-input ordered join.
 Their standard routes answer the same selected-output request.
 
-\techniqueguide{06}{XOR-compatible queries for one geometric product}
-The candidate requests eight specific coefficients of \(ab\). For
+\techniqueguide{06}{Figure~\ref{fig:technique-06}: XOR-compatible queries for one geometric product}{The candidate requests eight specific coefficients of \(ab\). For
 each output blade mask \(K\), a contributing pair must satisfy
 \(A\mathbin{\triangle}B=K\), where \(\triangle\) is symmetric
 difference of the sets of basis directions. This narrows which pairs
@@ -690,11 +732,10 @@ both routes return an owned matrix. The grid varies
 positive, mixed, or degenerate metric signature; horizon and signature
 are the possible visual categories. It does not vary the number of
 requested coefficients, even though that would be a useful later
-test. The warm ratio alone excludes indexing setup and episode cost.
-\techniqueplot{06}{Selected geometric-product coefficients}{Indexing cost, varying target counts, and complete-episode cost.}
+test. The warm ratio alone excludes indexing setup and episode cost.}
+\techniqueplot{06}{Selected geometric-product coefficients}
 
-\techniqueguide{07}{three-input join for selected ordered-product coefficients}
-This candidate uses a three-way mask relation to obtain five selected
+\techniqueguide{07}{Figure~\ref{fig:technique-07}: three-input join for selected ordered-product coefficients}{This candidate uses a three-way mask relation to obtain five selected
 coefficients of \((ab)c\) without necessarily materializing the
 intermediate \(ab\). The baseline computes that same left-associated
 product directly and extracts the same five numbers; changing the
@@ -705,8 +746,8 @@ positive, mixed, or degenerate metric signature. Horizon and signature
 form the legend categories if the qualified subset permits them.
 Only the route for this fixed selected-output request changes. A
 faster point would show a warm benefit relative to full nested
-products; plan construction and complete-episode time still matter.
-\techniqueplot{07}{Three-input selected-output join}{Plan construction, other target sets, and complete-episode cost.}
+products; plan construction and complete-episode time still matter.}
+\techniqueplot{07}{Three-input selected-output join}
 
 A \code{ProductPlan} or ternary plan stores paths that can be reused
 when topology is stable. It must reread coefficients and revalidate
@@ -728,8 +769,7 @@ Its measured warm-time ratios vary with the number of requests
 in the episode; Equation~\eqref{eq:episode} shows the additional
 costs needed to decide whether preparation is worthwhile overall.
 
-\techniqueguide{08}{prepared vector-product plan versus direct product}
-For two sparse vectors with all (n) grade-one coefficients present,
+\techniqueguide{08}{Figure~\ref{fig:technique-08}: prepared vector-product plan versus direct product}{For two sparse vectors with all \(n\) grade-one coefficients present,
 the candidate prepares a list of possible product paths from their
 stable support and then rereads changed numeric coefficients on each
 request. The baseline executes the ordinary direct product for the
@@ -741,8 +781,8 @@ and signature if present. Here \(H=1\) is one request after
 preparation, whereas \(H=32\) means 32 requests with the same support
 but new coefficients. The warm point compares execution after the
 plan exists; the plan is worthwhile only if its construction cost is
-recovered in the full (H)-request episode.
-\techniqueplot{08}{Prepared vector-product plan}{Plan construction, first use, memory, and total cost across reuse horizons.}
+recovered in the full (H)-request episode.}
+\techniqueplot{08}{Prepared vector-product plan}
 
 \subsection{Expression sharing and algebraic rewriting}
 An expression DAG can share a subexpression within one evaluation
@@ -769,15 +809,14 @@ Garamon.jl product chain on identical seeded inputs. Preparation,
 evaluation, retained plan storage, and full-episode cost are separate
 observations; identical baseline scenarios reuse their archived
 baseline measurement. An independent exact blade-word enumeration
-checks the output before timing. The figure remains provisional until
-isolated measurements qualify.
-Figures~\ref{fig:technique-16} and \techniqueintro{23}
+checks the output before timing. Figure~\ref{fig:technique-23}
+remains provisional until isolated measurements qualify.
+Figures~\ref{fig:technique-16} and \ref{fig:technique-23}
 cover expression sharing and bounded associative rewriting,
 respectively. Both require the cost of building a reusable plan
 and a complete same-output baseline before an episode comparison.
 
-\techniqueguide{16}{reusing one product node and invalidating changed values}
-The expression is either \(ab+ab\), labelled \emph{shared}, or
+\techniqueguide{16}{Figure~\ref{fig:technique-16}: reusing one product node and invalidating changed values}{The expression is either \(ab+ab\), labelled \emph{shared}, or
 \(ab+ac\), labelled \emph{distinct}. The first form has one product
 node referenced twice; the second has two different product nodes.
 The candidate prepares a bounded expression graph and evaluates all
@@ -789,9 +828,10 @@ The four cases are dimension three or four crossed with shared or
 distinct structure; metric pattern and number of evaluations are
 fixed. The corrected plot uses color for structure. All output
 coefficients are owned; a lower warm ratio would concern this small
-two-evaluation episode and would not include graph construction.
-\techniqueplot{16}{Shared versus distinct expression DAG}{Graph construction, other expression shapes, and retained memory.}
-\techniqueplot{23}{E-graph rewriting}{Bounded associative saturation, support-cost extraction, plan preparation, full-output execution, and shared baseline.}
+two-evaluation episode and would not include graph construction.}
+\techniqueplot{16}{Shared versus distinct expression DAG}
+\techniqueguide{23}{Figure~\ref{fig:technique-23}: choosing an exact product-chain parenthesization}{A bounded e-graph records all contiguous binary splits of a three- or four-factor product chain; a support-count cost model chooses one without changing factor order. The candidate prepares and executes that plan, while the baseline uses the ordinary left-associated chain on the same seeded factors and complete output. The grid varies ten dimensions, factor count 3/4, support width 2/4/8, fixed or alternating supports, prebuilt or rebuilt preparation, and horizons 1/16/128. The experiment asks whether fewer predicted intermediate support pairs repay search and preparation. The visible card is an oracle check, not a timing result.}
+\techniqueplot{23}{E-graph rewriting}
 
 The exterior product can be written as a signed disjoint convolution:
 for each output mask $S$, sum $\epsilon(A,S\setminus A)x_Ay_{S\setminus A}$
@@ -810,12 +850,14 @@ over an ordinary commutative sum--product ring can achieve
 $O(n^2 2^n)$~\cite{bjorklund2007}; its transform does not immediately
 preserve the anticommutative shuffle sign. The present exact scan
 therefore makes no claim to that bound, nor to a geometric-product
-algorithm. Its figure remains provisional until an isolated run.
-Figure~\techniqueintro{39} is the signed disjoint-convolution
+algorithm. Figure~\ref{fig:technique-39} remains provisional until an
+isolated run.
+Figure~\ref{fig:technique-39} is the signed disjoint-convolution
 experiment for the exterior product; its requested output is not
 the full geometric product.
 
-\techniqueplot{39}{Signed disjoint convolution}{Exact exterior-product cost and transform preparation by support density.}
+\techniqueguide{39}{Figure~\ref{fig:technique-39}: exact exterior product as a signed disjoint-mask convolution}{The candidate groups exterior-product terms by disjoint input masks and applies the exact blade-order shuffle sign; it never discards a term by numeric approximation. The baseline computes the same complete wedge through ordinary pairwise sparse multiplication. The grid varies dimensions 2--11, input density 0.01/0.25/1, coefficient width 8/64 bits, horizon 1/32/256, and prepared/one-shot/pairwise modes. A prepared scan may save repeated searches but consumes setup and memory; the point of the experiment is the complete crossover, not one inner loop. The card reports correctness only.}
+\techniqueplot{39}{Signed disjoint convolution}
 
 Bilinear kernel synthesis
 and verified superoptimization target small fixed kernels. Their
@@ -840,7 +882,8 @@ episodes with the standard Garamon.jl product-chain coefficient. It
 varies dimension, signature, active-support width and placement,
 stable or changing supports, target reachability, plan preparation,
 and episode horizon. Both preparation and execution are recorded;
-the figure remains provisional until isolated measurements qualify.
+Figure~\ref{fig:technique-42} remains provisional until isolated
+measurements qualify.
 
 For the exact split Clifford domain described above, the spinor transform
 turns a geometric product into matrix multiplication. A bilinear
@@ -854,11 +897,12 @@ dominate. We use arbitrary-precision integer coefficients so that
 the bilinear identity and inverse transform remain exact. The domain
 is bounded to interleaved $\mathrm{Cl}(r,r)$ with $1\leq r\leq5$;
 outside that domain the route refuses rather than approximates.
-Figure~\techniqueintro{40} locates the bounded seven-product
+Figure~\ref{fig:technique-40} locates the bounded seven-product
 bilinear kernel experiment, including the conversion to and from
 the split-signature matrix representation.
 
-\techniqueplot{40}{Bilinear kernel synthesis}{Seven-product recursion, classical cutoff, transform, inverse transform, preparation, and exact full-output baseline.}
+\techniqueguide{40}{Figure~\ref{fig:technique-40}: seven-product matrix blocks inside an exact Clifford product}{After the same split-signature transform used in Figure~\ref{fig:technique-22}, the candidate applies recursive Strassen seven-product blocks with classical cutoff 1 or 2, then converts back. The baseline is the ordinary Garamon.jl full product on the identical operands. The grid varies even dimensions 2--10, support count 4/16/64, fixed versus four-context left inputs, prebuilt versus rebuilt preparation, and horizons 1/16/128. Fewer scalar multiplications may be offset by additions, temporary matrices, and transforms. The figure currently verifies one case and cannot show a speedup.}
+\techniqueplot{40}{Bilinear kernel synthesis}
 
 The verified search route compares two candidate families: classical
 matrix multiplication and the recursive seven-product kernel.
@@ -875,16 +919,20 @@ the same seeded operand episodes and the same ordinary Garamon.jl
 sparse-product baseline, which is measured once per identical scenario.
 The campaigns vary support width, left-operand reuse, preparation,
 episode horizon, cutoff or cost weights. Independent blade-word
-enumeration checks the complete aggregate. Both figures remain
+enumeration checks the complete aggregate.
+Figures~\ref{fig:technique-41} and \ref{fig:technique-42} remain
 provisional until isolated measurements qualify.
-Figure~\techniqueintro{41} concerns the certified small-kernel
-search; Figure~\techniqueintro{42} concerns exact frontier
+Figure~\ref{fig:technique-41} concerns the certified small-kernel
+search; Figure~\ref{fig:technique-42} concerns exact frontier
 scheduling for a requested chain coefficient. Their output
 contracts differ, so their ratios must be interpreted within
 their own same-input comparisons.
 
-\techniqueplot{41}{Verified superoptimization}{Tensor verification, weighted candidate search, preparation, full-output execution, and shared baseline.}
-\techniqueplot{42}{Wavefront recursion}{Certified suffix width, frontier memory, preparation, and exact target-coefficient episodes against the standard product chain.}
+\techniqueguide{41}{Figure~\ref{fig:technique-41}: selecting a proved-equivalent small multiplication kernel}{For each \(2\times2\) matrix block, the candidate search checks a classical kernel and a seven-product kernel on all elementary input pairs, proving the same bilinear result before timing. The cost model tries addition weights 1 or 10 and multiplication weights 1, 10, or 100; it then chooses a candidate. The complete transformed Clifford output is compared with the same direct Garamon.jl product. The grid also varies even dimensions 2--10, support counts 4, 16, or 64, fixed or four-context left operands, prebuilt or rebuilt preparation, and horizons 1, 16, or 128. Search, verification, transforms, execution, and memory must all count. Only a correctness card is present now.}
+\techniqueplot{41}{Verified superoptimization}
+
+\techniqueguide{42}{Figure~\ref{fig:technique-42}: pruning a product-chain frontier without losing a target coefficient}{The candidate builds suffix-reachability sets for an ordered three- or four-factor chain and keeps only intermediate masks that can still reach the requested final coefficient. The baseline evaluates the same chain and extracts that coefficient. The grid varies dimension 2--129, chain length 3/4, narrow/wide active directions, clustered/spread supports, reachable/absent targets, stable/changing inputs, prebuilt/rebuilt preparation, positive/mixed/degenerate metric, and horizons 1/32/256. A narrower frontier may reduce work, but certificate building, queue memory, and fallback belong in the episode. The card is validation only.}
+\techniqueplot{42}{Wavefront recursion}
 
 \section{Reuse, memory, and compilation}
 \subsection{Workspaces and a RAM-bounded route}
@@ -907,8 +955,7 @@ warm-execution advantage for the displayed cases, while preparation,
 retained memory, and owned-output costs still need separate plots
 before a complete-episode conclusion can be drawn.}{}
 
-\techniqueguide{09}{reused product workspace versus direct execution}
-Both routes multiply the same pair of sparse vectors, with all (n)
+\techniqueguide{09}{Figure~\ref{fig:technique-09}: reused product workspace versus direct execution}{Both routes multiply the same pair of sparse vectors, with all \(n\)
 grade-one coefficients present, and write all structurally possible
 coefficients to an owned matrix. The candidate first prepares a
 product plan and private reusable workspace; its timed call refills
@@ -921,8 +968,8 @@ metric signatures. A point below the black line means a faster warm
 call for that exact case, not that reserving memory and constructing
 the plan paid off in total. The output is copied and owned in both
 routes; the panel does not quantify workspace bytes retained between
-calls.
-\techniqueplot{09}{Reused vector-product workspace}{Preparation, allocations, retained bytes, and complete-episode cost.}
+calls.}
+\techniqueplot{09}{Reused vector-product workspace}
 
 The proposed RAM-bounded route asks whether an exact output can be
 streamed in blocks or recomputed from checkpoints when a full
@@ -969,8 +1016,7 @@ coefficient matrix. A policy's relative height in its own panel is
 not a direct policy-to-policy comparison because each has its own
 baseline samples and potentially different completed cases.
 
-\techniqueguide{10}{least-recently-used plan retention}
-LRU discards the plan whose last access is oldest when a new support
+\techniqueguide{10}{Figure~\ref{fig:technique-10}: least-recently-used plan retention}{LRU discards the plan whose last access is oldest when a new support
 context needs room. It never changes the algebraic result. This grid
 varies \(n=2,\ldots,8,16,32,64,65,96,128,129\), trace
 (scan, phase, shift), \(H=32\) or \(1024\), cache capacity one or two,
@@ -981,11 +1027,10 @@ may be plotted on top of one another. The roulette exponent,
 frequency-table size, and draw seed are held at defaults and do not
 define LRU variants. The ratio answers whether this cache policy's
 warm trace execution beats uncached direct multiplication for each
-completed case; it does not isolate hit rate or plan rebuild time.
-\techniqueplot{10}{LRU plan cache}{Capacity-stratified hit rate, rebuild time, memory, and complete episode.}
+completed case; it does not isolate hit rate or plan rebuild time.}
+\techniqueplot{10}{LRU plan cache}
 
-\techniqueguide{11}{randomized eviction of a cached plan}
-Roulette chooses a victim probabilistically when the cache is full.
+\techniqueguide{11}{Figure~\ref{fig:technique-11}: randomized eviction of a cached plan}{Roulette chooses a victim probabilistically when the cache is full.
 Its weight for a resident plan with \(h\) recorded hits is
 \((1+h)^{-e}\): exponent \(e=0\) makes victims equally likely, while
 larger \(e\) increasingly protects frequently reused plans. The grid
@@ -998,11 +1043,10 @@ trace and marker shape horizon when available; exponent, seed,
 capacity, and signature are not separated by the current legend and
 can overlap. The direct uncached baseline receives the identical
 request sequence. Any apparent winner in this panel needs a
-parameter-stratified follow-up before recommending a roulette setting.
-\techniqueplot{11}{Roulette plan eviction}{Separate exponent, seed, hit-rate, and memory comparisons.}
+parameter-stratified follow-up before recommending a roulette setting.}
+\techniqueplot{11}{Roulette plan eviction}
 
-\techniqueguide{12}{TinyLFU frequency-based admission}
-TinyLFU maintains approximate request frequencies and may reject a
+\techniqueguide{12}{Figure~\ref{fig:technique-12}: TinyLFU frequency-based admission}{TinyLFU maintains approximate request frequencies and may reject a
 new plan instead of evicting a more useful resident one. The
 \emph{frequency\_slots} parameter is the number of counters per
 sketch row: 16, 256, or 4096. A larger table may reduce collisions
@@ -1015,11 +1059,10 @@ when qualified cases cover them; counter-table size, capacity, and
 signature remain additional unencoded dimensions. The plotted ratio
 uses the same trace executed without a cache as its baseline, so it
 cannot by itself show whether better admission compensates for the
-metadata and retained memory.
-\techniqueplot{12}{TinyLFU plan admission}{Frequency-table cost, admission decisions, hit rate, and complete episode.}
+metadata and retained memory.}
+\techniqueplot{12}{TinyLFU plan admission}
 
-\techniqueguide{13}{SIEVE second-chance eviction}
-SIEVE stores resident plans in a queue and records whether each was
+\techniqueguide{13}{Figure~\ref{fig:technique-13}: SIEVE second-chance eviction}{SIEVE stores resident plans in a queue and records whether each was
 visited. An eviction scan clears a visited mark and gives that plan a
 second chance; it selects an unvisited plan for removal. This changes
 cache retention, not the exact product. The grid varies the same
@@ -1031,8 +1074,8 @@ signature may produce same-colored overlapping points. Each ratio
 compares SIEVE with direct uncached multiplication on the same
 ordered requests. Its warm time does not expose scan counts,
 reconstruction time, or memory, all of which matter for choosing a
-cache policy.
-\techniqueplot{13}{SIEVE plan eviction}{Second-chance scans, rebuild time, hit rate, memory, and complete episode.}
+cache policy.}
+\techniqueplot{13}{SIEVE plan eviction}
 
 \subsection{JIT generation, precompilation, and restart}
 On-demand code generation may unroll a bounded path set for a
@@ -1069,11 +1112,10 @@ precompilation catalogue (Figure~\ref{fig:technique-15}) have
 different setup boundaries. Warm execution alone cannot answer
 whether generation, disk build, or fresh-process reload pays off.
 
-\techniqueguide{14}{bounded generated vector-product kernel}
-The candidate generates a specialized product kernel from a prepared
+\techniqueguide{14}{Figure~\ref{fig:technique-14}: bounded generated vector-product kernel}{The candidate generates a specialized product kernel from a prepared
 path plan with at most 256 paths. The baseline computes the same
 full vector product directly. Both routes use two sparse vectors
-with all (n) grade-one components present and return an owned
+with all \(n\) grade-one components present and return an owned
 matrix of all structurally possible coefficients. The grid varies
 \(n=2,\ldots,9,12,16\), \(H=1\) or \(32\), and positive, mixed, or
 degenerate metric signature. Color and shape identify horizon and
@@ -1081,11 +1123,10 @@ signature if the qualified cases contain both. Generation and JIT
 compilation occur before the plotted warm execution. Thus a point
 below one would show the generated call runs faster after setup; it
 would not show that generating and compiling pays off for one request
-or even for a 32-request episode.
-\techniqueplot{14}{Generated vector-product kernel}{Generation, compilation, code size, first use, and complete-episode cost.}
+or even for a 32-request episode.}
+\techniqueplot{14}{Generated vector-product kernel}
 
-\techniqueguide{15}{trained versus untrained precompilation requests}
-The finite catalogue is trained on a full-support, three-dimensional
+\techniqueguide{15}{Figure~\ref{fig:technique-15}: trained versus untrained precompilation requests}{The finite catalogue is trained on a full-support, three-dimensional
 Euclidean algebra (\emph{known}). An untrained four-dimensional
 context requested later is \emph{late}; \emph{changing} cycles
 through three untrained contexts. These scenario names describe the
@@ -1100,8 +1141,8 @@ updated coefficients. Color identifies scenario; horizon and request
 index may remain unencoded by the legend and should be read from the
 case table. A warm ratio does not include native-cache construction,
 fresh-process loading, or JIT readiness, which decide whether the
-catalogue saves time in practice.
-\techniqueplot{15}{Known and untrained catalogue requests}{Native-cache build, disk size, fresh-process reload, first use, and complete episode.}
+catalogue saves time in practice.}
+\techniqueplot{15}{Known and untrained catalogue requests}
 
 \section{Specialized algebraic structure}
 \subsection{Degeneracy and short identities}
@@ -1121,11 +1162,12 @@ larger ambient cases therefore use that ordinary inverse in the exactly
 isomorphic active coordinate subalgebra and embed its complete answer
 back. This baseline scope must accompany any reported timing.
 
-Figure~\techniqueintro{33} locates the radical-inverse
+Figure~\ref{fig:technique-33} locates the radical-inverse
 certificate and exact fallback experiment; a refused certificate
 remains an observed outcome rather than a missing timing point.
 
-\techniqueplot{33}{Radical nilpotence}{Certificate, finite-series preparation, inverse, and fallback by radical size.}
+\techniqueguide{33}{Figure~\ref{fig:technique-33}: an exact inverse using a certified radical}{A degenerate metric can have a radical, the directions pairing to zero with every vector. The candidate certifies this decomposition and uses a finite nilpotent correction around an invertible active part; a failed certificate falls back to the ordinary exact inverse. The baseline works in the isomorphic active coordinate algebra when the ambient dimension exceeds the ordinary inverse's five-coordinate limit. The grid varies ambient dimension 6--128, one or two radical directions, one to three active nonradical coordinates, positive/signed metric family, and three coefficient phases. The result must charge certification, series work, fallback, and the complete inverse. The card shows one validated case.}
+\techniqueplot{33}{Radical nilpotence}
 
 If an element satisfies a certified short polynomial identity,
 such as \(A^2=\lambda 1\), powers and recurrences can be evaluated
@@ -1142,11 +1184,12 @@ a small active vector span for a tractable full-grade oracle. The shared
 Pfaffian workspace alternates identical and changed pools, making numeric
 cache invalidation part of the episode rather than assuming constant data.
 
-Figure~\techniqueintro{34} addresses short polynomial identities
+Figure~\ref{fig:technique-34} addresses short polynomial identities
 for powers and recurrences. Its horizon counts repeated exact
 requests under the stated certificate.
 
-\techniqueplot{34}{Short polynomial identity}{Certification and exact powers or recurrences across exponents and horizons.}
+\techniqueguide{34}{Figure~\ref{fig:technique-34}: replacing repeated powering with a proved short identity}{If an element is certified to satisfy \(A^2=\lambda 1\), its powers can be reduced exactly using that identity. The candidate constructs and rechecks this certificate; the baseline uses ordinary exact binary powering on the same element and exponent. The grid varies dimensions 2--129, exponents 0/1/2/3/16/64, horizons 1/32, stable versus changed coefficients, Euclidean/signed/null/general metrics, and vector/simple-bivector/mixed element shapes. A refused certificate is an explicit fallback, not a speed result. The question is when repeated requests repay proof and validation. The current card has one oracle pass only.}
+\techniqueplot{34}{Short polynomial identity}
 
 \subsection{Scalar chains, Gram structure, and Gaussian classes}
 The scalar part of an even ordered product of vectors can be
@@ -1157,12 +1200,15 @@ floating-point cancellation need independent examination. Shared
 contractions across related chains might repay a workspace or
 cache; changing vectors invalidate numeric contractions.
 
-Figure~\techniqueintro{35} requests one scalar from an even
-vector chain; Figure~\techniqueintro{K3} tests whether sharing
+Figure~\ref{fig:technique-35} requests one scalar from an even
+vector chain; Figure~\ref{fig:technique-K3} tests whether sharing
 contractions across related chains repays workspace preparation.
 
-\techniqueplot{35}{Pfaffian scalar chain}{Chain length, construction, contractions, reuse, and oracle-checked output.}
-\techniqueplot{K3}{Shared Pfaffian workspace}{Shared preparation versus separate exact scalar-chain calculations.}
+\techniqueguide{35}{Figure~\ref{fig:technique-35}: one scalar from an even chain of vectors}{The candidate computes the scalar part of an ordered product of an even number of vectors through a Pfaffian of pairwise contractions. The baseline forms the same ordered chain directly and extracts that scalar; neither route is being asked for the full multivector. The planned grid varies dimension 2--64, even chain length 2/4/6/8/12/16, and horizons 1/8/16. Building contractions and the Pfaffian must be included, especially when cancellation occurs. The current figure verifies one oracle case; it cannot establish that this specialized scalar route is faster.}
+\techniqueplot{35}{Pfaffian scalar chain}
+
+\techniqueguide{K3}{Figure~\ref{fig:technique-K3}: sharing pairwise contractions across related scalar chains}{Several even vector chains can reuse a table of pairwise contractions before each chain's Pfaffian is evaluated. The candidate owns and updates that workspace; the baseline computes each chain's exact scalar separately. The planned grid varies dimension 3--129 and episode horizons 3/8/32, with identical and changed vector pools to test invalidation of numeric contractions. The result must include workspace construction, updates, retained memory, and all scalar outputs. A single preflight card checks algebraic correctness but says nothing about an amortization threshold.}
+\techniqueplot{K3}{Shared Pfaffian workspace}
 
 A cross-Gram matrix addresses the scalar pairing of two
 decomposable, equal-grade blades, rather than all coefficients of a
@@ -1210,13 +1256,16 @@ simulation context of noninteracting fermions and Slater states is
 established in~\cite{terhal2002,divincenzo2005}; the present exact-integer
 shear restriction is our benchmark contract.
 
-Figures~\techniqueintro{36} and \techniqueintro{37}
+Figures~\ref{fig:technique-36} and \ref{fig:technique-37}
 respectively concern the certified cross-Gram scalar pairing and
 the restricted Slater-state overlap. Both request a scalar, but
 their admission checks and baselines are distinct.
 
-\techniqueplot{36}{Cross-Gram rank}{Certified rank, pairing construction, selected scalar cost, and fallback.}
-\techniqueplot{37}{Fermionic Gaussian operators}{Class certification, closed operations, conversion, and fallback.}
+\techniqueguide{36}{Figure~\ref{fig:technique-36}: certifying a zero scalar pairing with cross-Gram rank}{For two decomposable grade-\(k\) blades, the requested scalar pairing equals the determinant of their \(k\times k\) cross-Gram matrix. Rank below \(k\) therefore certifies an exact zero. The candidate constructs and validates this matrix; the baseline obtains the same scalar through the ordinary blade product. The grid varies dimension 3--129, grade 2/3, generic/dependent rank, vector support 1/2, stable/vector-changing/metric-changing inputs, positive/mixed/degenerate metric, prepared/direct mode, and horizons 1/32/256. The figure is a correctness card; rank construction and invalidation costs are not yet timed here.}
+\techniqueplot{36}{Cross-Gram rank}
+
+\techniqueguide{37}{Figure~\ref{fig:technique-37}: exact Slater-state overlap after one-body shears}{The restricted Gaussian candidate keeps a number-conserving fermionic state as an orbital matrix and applies exact one-body shears without expanding all Fock amplitudes. Its scalar overlap with a target Slater state is a determinant. The comparison is factored shear updates versus a materialized one-body matrix on the same state and scalar output; unsupported states are rejected. The grid varies dimension 3--129, particles 2/3, shear count 1/4/16, orbital support 1/2, same/shifted target, factored/materialized mode, and horizons 1/32/256. Preparation, conversion, determinant work, and memory decide the result. The card shows validation only.}
+\techniqueplot{37}{Fermionic Gaussian operators}
 
 A sequence of Givens rotations~\cite{givens1958} represents an orthogonal change of basis
 through plane updates instead of a dense exterior-power matrix. For a
@@ -1238,14 +1287,16 @@ angle, input support, grade, and episode horizon. It records preparation
 and execution separately, because storing a factored transform can be
 attractive across repeated calls even when a single matrix application
 is faster. A matrix oracle checks every resulting coefficient exactly;
-the two benchmark arms use the same seed and inputs. The placeholder
-below will be replaced only after a qualified isolated run.
+the two benchmark arms use the same seed and inputs.
+Figure~\ref{fig:technique-38} will show a performance comparison only
+after a qualified isolated run.
 
-Figure~\techniqueintro{38} is the exact rational Givens
+Figure~\ref{fig:technique-38} is the exact rational Givens
 basis-change comparison. Its two arms return the same transformed
 multivector, with separate preparation and application costs.
 
-\techniqueplot{38}{Factored Givens basis change}{Transformation count, support expansion, conditioning, and total episode.}
+\techniqueguide{38}{Figure~\ref{fig:technique-38}: applying an exact basis rotation as factors or a matrix}{The candidate applies rational Givens plane rotations directly to sparse blade masks, carrying the exterior-reordering sign exactly. The alternative materializes the complete basis-change matrix and applies its exterior extension to the same multivector. The grid varies dimensions 2--129, grade 1/2, rotation count 1/2/4/8, sparse support 1/4/16, two rational angle pairs, factored/materialized mode, and horizons 1/64/1024. The current implementation admits Euclidean metric and exact coefficients only. Preparation, support expansion, application, and owned output belong in the comparison. The card is one correctness check, not a performance result.}
+\techniqueplot{38}{Factored Givens basis change}
 
 \subsection{Exact modular and filtered decisions}
 For integer coefficients and a diagonal integer metric, the coefficient
@@ -1316,18 +1367,23 @@ The campaign compares preparation and repeated execution against the
 same direct chain under shared seeds, across ten dimensions, metric
 signatures, support sizes and stable, cancelling, support-changing and
 metric-changing episodes. It records the number of fallbacks and the
-gap between predicted and actual intermediate support. The figure
-remains provisional until an isolated run.
+gap between predicted and actual intermediate support.
+Figure~\ref{fig:technique-46} remains provisional until an isolated run.
 
-Figures~\techniqueintro{44}, \techniqueintro{45}, and
-\techniqueintro{46} cover complete integer reconstruction,
+Figures~\ref{fig:technique-44}, \ref{fig:technique-45}, and
+\ref{fig:technique-46} cover complete integer reconstruction,
 one exact coefficient-sign decision, and a chained structural
 certificate, respectively. Their outputs differ, so each figure
 uses its own same-contract standard route.
 
-\techniqueplot{44}{Multimodular reconstruction}{Prime count, modular products, CRT bounds, and exact reconstruction.}
-\techniqueplot{45}{Filtered adaptive precision}{Certified fast decisions, near-zero fallbacks, and total decision time.}
-\techniqueplot{46}{Propagated certificates}{Validation, invalidation, fallback, and chained-operation cost.}
+\techniqueguide{44}{Figure~\ref{fig:technique-44}: reconstructing an exact integer product from small moduli}{The candidate evaluates every product coefficient modulo several primes and reconstructs signed integers by the Chinese remainder theorem only after a rigorous coefficient bound proves that the modulus product is large enough. If the prime budget is insufficient, it falls back to direct arbitrary-precision accumulation. The baseline always uses that direct exact route on the same complete output. The grid varies dimension 2--129, coefficient width 8/64/128 bits, prime width 17/31 bits, budget 1/4/8/16 primes, prepared/one-shot/direct modes, metric signature, and horizons 1/64/1024. Reduction, bound construction, reconstruction, and fallback determine the crossover. The card shows no timing yet.}
+\techniqueplot{44}{Multimodular reconstruction}
+
+\techniqueguide{45}{Figure~\ref{fig:technique-45}: exact sign decisions with checked fast arithmetic}{This experiment requests the sign of one coefficient, not the full product. The candidate first accumulates its contributing blade pairs in checked 128-bit integers; any overflow triggers a complete arbitrary-precision recomputation. The baseline computes the same sign directly with arbitrary-precision integers. The grid varies dimension 2--129, coefficient width 8/64/128 bits, ordinary/near-zero/exact-zero cancellation, prepared/one-shot/direct mode, positive/mixed/degenerate metric, and horizons 1/64/1024. A near-zero value is challenging because cancellations make a quick sign guess unsafe. Preparation, fast decisions, overflow fallbacks, and total time must all be counted. The current card is validation only.}
+\techniqueplot{45}{Filtered adaptive precision}
+
+\techniqueguide{46}{Figure~\ref{fig:technique-46}: carrying a structural support certificate through a chain}{The candidate prepares two linked product plans. The first certifies an upper bound on intermediate output masks; the second uses that bound for the next product. Changed supports or metric invalidate the certificate and trigger the ordinary direct chain, which is also the baseline for the same complete output. The grid varies dimension 2--129, support size 2/3, stable/cancelling/support-changing/metric-changing episodes, certified/direct mode, positive/mixed/degenerate metric, and horizons 1/32/256. The comparison must charge certificate construction, validation, fallback count, and complete execution. A cancelled intermediate term may reduce actual support but never invalidates the upper bound. The card supplies no timing.}
+\techniqueplot{46}{Propagated certificates}
 
 \section{Approximation is a separate contract}
 Contribution thresholds, stochastic contribution roulette, and
@@ -1342,13 +1398,16 @@ study must report whole-trajectory error, rare events, bias,
 random seeds, and the cost of any residual or replay. The
 approximate API and its figures remain separate from the exact
 comparisons.
-Figure~\techniqueintro{24} is the deferred exact-replay slot;
-Figure~\techniqueintro{25} is the explicitly approximate
+Figure~\ref{fig:technique-24} is the deferred exact-replay slot;
+Figure~\ref{fig:technique-25} is the explicitly approximate
 pruning and roulette slot. Their error contracts must not be
 collapsed into one speed comparison.
 
-\techniqueplot{24}{Deferred exact replay}{Provenance size, deferred work, replay cost, and final exactness across recurrences.}
-\techniqueplot{25}{Approximate pruning and roulette}{Survival chance, time, trajectory error, bias, and rare events.}
+\techniqueguide{24}{Figure~\ref{fig:technique-24}: deferring work while preserving an exact replay path}{The candidate may postpone product contributions during an affine or bilinear recurrence, but it retains enough provenance to reconstruct every term required by the final exact request. The baseline evaluates the same recurrence directly at every step. The grid varies dimensions 2--128, horizons 2/4/8, contracting/neutral/amplifying regimes, and positive/indefinite/degenerate metrics. The figure is meant to show provenance size, deferred work, replay time, and final equality, not simply a fast provisional step. No qualified timing is present; its card checks one exact oracle case.}
+\techniqueplot{24}{Deferred exact replay}
+
+\techniqueguide{25}{Figure~\ref{fig:technique-25}: an explicitly approximate product with pruning or roulette}{This route is allowed to omit or randomly retain contributions under an approximate contract, so it cannot be ranked against an exact product by time alone. The planned grid varies survival probability from \(1/16\) through \(1\) and five draw seeds; the experiment must report runtime, bias, rare missed contributions, and whole-trajectory error against the exact result. A survival probability of one keeps every eligible contribution, while smaller values trade work for possible error. The displayed card checks a representative case but does not certify an accuracy or speed frontier.}
+\techniqueplot{25}{Approximate pruning and roulette}
 
 \section{Parallel execution and selection}
 Threads can partition independent products or output regions, but
@@ -1362,14 +1421,19 @@ and borrowed device output from owned host output~\cite{cudaperf}.
 Kernel fusion and captured graphs are separate candidates for
 repeated resident work; their preparation and output semantics
 must match the CPU episode being compared.
-Figures~\techniqueintro{27}, \techniqueintro{28}, and
-\techniqueintro{29} separate CPU threads, CPU processes, and GPU
+Figures~\ref{fig:technique-27}, \ref{fig:technique-28}, and
+\ref{fig:technique-29} separate CPU threads, CPU processes, and GPU
 kernels. The full comparison for each includes its own packing,
 communication, transfer, and output-ownership boundary.
 
-\techniqueplot{27}{CPU threads and SIMD batches}{Batch size, lane count, packing, reductions, and complete episode.}
-\techniqueplot{28}{CPU processes}{Worker count, serialization, duplicated plans, and throughput.}
-\techniqueplot{29}{GPU kernels and transfers}{Host-owned versus resident requests, launches, transfers, and device memory.}
+\techniqueguide{27}{Figure~\ref{fig:technique-27}: distributing independent products over CPU threads or SIMD lanes}{The candidate partitions a batch into independent CPU thread tasks or packed vector lanes, then returns the same owned results as the serial direct route. The registered grid distinguishes one request from a 32-request episode; actual batch size, lane utilization, packing, scheduling, and reduction order must accompany each timed result. The purpose is to find whether parallel work repays its setup and memory costs without races or changed arithmetic semantics. The card checks one output only and is not a measured thread-versus-SIMD ranking.}
+\techniqueplot{27}{CPU threads and SIMD batches}
+
+\techniqueguide{28}{Figure~\ref{fig:technique-28}: throughput from separate CPU worker processes}{The candidate sends independent exact products to one, two, or four worker processes; the same batch through the standard serial route is the reference. The grid varies dimension 2--128, batch size 4/16/64/256, and two input families: eight sparse blades or a 64-blade active subalgebra. Process startup, serialization, duplicated plans, communication, and owned output must be included to decide if workers help. Batch size is a number of independent products, not a reuse horizon. The visible card validates one case and cannot yet support a throughput claim.}
+\techniqueplot{28}{CPU processes}
+
+\techniqueguide{29}{Figure~\ref{fig:technique-29}: GPU product execution including data movement}{The candidate runs an exact product kernel on a GPU while the reference performs the same requested output on the CPU. The grid includes dimensions 8 and 65 and horizons 1/32, deliberately crossing a blade-mask width boundary. Host-owned requests must count transfer to and from the device; resident requests must state who owns the result and how many kernel launches occur. The comparison asks when repeated GPU work repays transfer, launch, and device-memory costs. A preflight card alone proves neither that the GPU route is faster nor that all workloads fit on the device.}
+\techniqueplot{29}{GPU kernels and transfers}
 
 A portfolio selector can route a certified workload to an
 admissible algorithm using features such as dimension, support
@@ -1382,11 +1446,12 @@ combinations only after qualified measurements exist. SHAP-style
 attribution may help explain a trained selector~\cite{shap};
 it is not evidence that an algorithm is intrinsically faster.
 Until then, no learned routing threshold is claimed.
-Figure~\techniqueintro{26} is the analytic-selector slot.
+Figure~\ref{fig:technique-26} is the analytic-selector slot.
 Its regret can be interpreted only after the admissible exact
 routes and the cost of extracting their features are measured.
 
-\techniqueplot{26}{Analytic route selector}{Feature and dispatch overhead and regret against admissible exact routes.}
+\techniqueguide{26}{Figure~\ref{fig:technique-26}: choosing an exact execution route from workload features}{The selector inspects dimension, metric signature, requested output, support, and reuse horizon, then chooses an admissible exact route. Its result is compared with the same-input standard Garamon.jl route and, when available, the fastest admissible measured route; the latter gap is called regret. The registered grid varies dimension 2--128, horizon 1/32, and positive/mixed/degenerate metric. Feature extraction, selection, conversion, and chosen-route preparation must be counted. The current card checks one case; it cannot define a learned threshold or claim low regret without qualified route measurements.}
+\techniqueplot{26}{Analytic route selector}
 
 \section{Combining strategies}
 Several techniques act at different stages: a certified active

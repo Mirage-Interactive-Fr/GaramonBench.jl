@@ -217,6 +217,15 @@ end
     catalogue_caption=GaramonBench._technique_caption_text(rows,catalogue_cases,21)
     @test occursin("horizon=1/8/32",catalogue_caption)
     @test occursin("request\\_index=1/4/12",catalogue_caption)
+
+    near_baseline=[(time_ratio=0.5,),(time_ratio=1.5,)]
+    low,high,marker_y=GaramonBench._technique_ratio_limits(near_baseline)
+    @test 0.1<low<0.5 && 1.5<high<10 && isnothing(marker_y)
+    @test GaramonBench._technique_ratio_ticks(low,high)[1]==[0.5,1.0]
+    wide=[(time_ratio=0.03,),(time_ratio=14.0,)]
+    low,high,marker_y=GaramonBench._technique_ratio_limits(wide;
+        has_exclusions=true)
+    @test low<0.03 && high>14 && 14<marker_y<high
 end
 
 @testset "concurrent article builds publish complete PDFs" begin
