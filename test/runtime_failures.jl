@@ -1,4 +1,4 @@
-using Test, GaramonBench, TOML
+using Test, GaramonBench, TOML, SHA
 
 @testset "paired budgets admit the declared samples of a slow standard reference" begin
     rows=[(phase="first_execution",time_ns=1e6),
@@ -316,6 +316,76 @@ end
         GaramonBench.write_toml(report,Dict("technique"=>[record]))
         @test_throws ErrorException GaramonBench._check_native_stage_report(
             report,["13"],"benchmark")
+    end
+end
+
+@testset "old completion traces cannot replace missing timing samples" begin
+    config=load_config(joinpath(@__DIR__,"..","config","smoke.toml"))
+    config["campaign"]["backend"]="benchmarktools"
+    config["grid"]["length"]=[4]
+    config["case_defaults"]["adapter"]="missing_timings_retry"
+    config["case_defaults"]["baseline_required"]=true
+    config["limits"]["samples"]=2
+    generated=Ref(0)
+    register_adapter!(BenchmarkAdapter(name="missing_timings_retry",
+        contract="owned bytes for missing-measurement retry test",
+        generate=(case,directory,rng)->begin
+            generated[]+=1
+            UInt8[1,2,3,4]
+        end,
+        execute=copy,baseline_execute=copy,baseline_name="same_bytes",
+        baseline_scenario=(values,case)->Dict("values"=>Int.(values)),
+        baseline_output_identity=values->bytes2hex(sha256(values)),
+        oracle=(values,result)->result==values);replace=true)
+    mktempdir() do root
+        output=joinpath(root,"benchmark","13")
+        cache=joinpath(root,"benchmark","_baselines")
+        mkpath(dirname(output))
+        GaramonBench.write_toml(joinpath(root,"benchmark","bench-progress.toml"),
+            Dict("technique"=>[Dict("id"=>"13","status"=>"complete")]))
+        GaramonBench.write_toml(joinpath(root,"launch-progress.toml"),
+            Dict("status"=>"complete"))
+        @test !GaramonBench._completed_technique_archive(config,output)
+        run_resumable_campaign(config;output,baseline_cache_root=cache)
+        @test generated[]==1
+        case=only(expand_cases(config))
+        directory=joinpath(output,"cases",case_id(case))
+        rm(joinpath(directory,"samples.csv"))
+        @test isfile(joinpath(directory,"completion.toml"))
+        @test !GaramonBench._completed_technique_archive(config,output)
+        @test_logs (:warn,r"Requeued case without timing measurements") run_resumable_campaign(
+            config;output,baseline_cache_root=cache)
+        @test generated[]==2
+        @test TOML.parsefile(joinpath(directory,"verdict.toml"))["baseline_cache_hit"]
+        @test isempty(resumable_status(config,output)["pending_ids"])
+        @test length(readdir(joinpath(output,"unmeasured-attempts","cases")))==1
+        # A header-only sample file is not a timing measurement either.
+        write(joinpath(directory,"samples.csv"),"case_id,phase,time_ns\n")
+        @test_logs (:warn,r"Requeued case without timing measurements") run_resumable_campaign(
+            config;output,baseline_cache_root=cache)
+        @test generated[]==3
+        run_resumable_campaign(config;output,baseline_cache_root=cache)
+        @test generated[]==3 # Complete verified samples are still skipped.
+        # An old RAM/resource exclusion is not a timing measurement. A new
+        # campaign launch retries it, with its previous evidence preserved.
+        saved=joinpath(root,"previous_case")
+        mv(directory,saved)
+        manifest=TOML.parsefile(joinpath(output,"campaign.toml"))
+        GaramonBench._record_resource_skip!(output,case,manifest,
+            Dict("kind"=>"cpu_out_of_memory"),"previous resource failure")
+        @test isempty(resumable_status(config,output)["completed_ids"])
+        @test_logs (:warn,r"returned to the timing queue") GaramonBench._queue_unmeasured_campaign_cases!(
+            root,["13"])
+        @test resumable_status(config,output)["pending_ids"]==[case_id(case)]
+        run_resumable_campaign(config;output,baseline_cache_root=cache)
+        @test generated[]==4 && isfile(joinpath(saved,"samples.csv"))
+        @test !isempty(readdir(joinpath(output,"unmeasured-attempts","resource-exclusions")))
+        open(joinpath(directory,"samples.csv"),"a") do io
+            println(io,"tampered")
+        end
+        @test_throws ErrorException run_resumable_campaign(
+            config;output,baseline_cache_root=cache)
+        @test generated[]==4 # Existing corrupted samples remain an integrity error.
     end
 end
 

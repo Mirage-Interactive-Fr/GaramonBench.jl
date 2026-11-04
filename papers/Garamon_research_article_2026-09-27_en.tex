@@ -42,6 +42,13 @@
 \newcommand{\techniqueplot}[2]{%
 \begin{figure}[!thp]
 \centering
+\IfFileExists{plot_technique_#1_pending.tex}{%
+\fbox{\parbox[c][18mm][c]{.84\linewidth}{\centering
+\textbf{Timing measurements pending}\\[2mm]
+\small #2}}%
+\caption[#2]{\textbf{#2.} \csname techniqueexplain#1\endcsname\space
+\input{plot_technique_#1_pending.tex}
+\techniquebacklink{#1}}}{%
 \IfFileExists{plot_technique_#1.pdf}{%
 \includegraphics[width=\linewidth]{plot_technique_#1.pdf}}{%
 \IfFileExists{preflight_technique_#1.pdf}{%
@@ -68,6 +75,7 @@ it reports no performance measurement. \techniquebacklink{#1}}}{%
 \caption[#2]{\textbf{#2.} \csname techniqueexplain#1\endcsname\space
 No plot file for this technique is installed in this build.
 \techniquebacklink{#1}}}}
+}%
 \label{fig:technique-#1}
 \end{figure}\FloatBarrier}
 \title{Toward Workload-Aware Geometric Algebra in Garamon.jl:\\
@@ -826,7 +834,7 @@ direct products and sum on both inputs. This tests whether shared
 work is reused safely while changed numeric values are refreshed.
 The four cases are dimension three or four crossed with shared or
 distinct structure; metric pattern and number of evaluations are
-fixed. The corrected plot uses color for structure. All output
+fixed. A measured panel uses color to distinguish the two structures. All output
 coefficients are owned; a lower warm ratio would concern this small
 two-evaluation episode and would not include graph construction.}
 \techniqueplot{16}{Shared versus distinct expression DAG}

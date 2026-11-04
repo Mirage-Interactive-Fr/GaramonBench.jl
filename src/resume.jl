@@ -494,6 +494,39 @@ function _campaign_meter_close!(display::_CampaignMeter;complete::Bool,failure=n
     nothing
 end
 
+function _requeue_unmeasured_cases!(output,cases)
+    for case in cases, area in ("cases","staging")
+        id=case_id(case)
+        directory=joinpath(output,area,id)
+        isdir(directory) || continue
+        # Ordinary incomplete staging work is already retried by the runner.
+        area=="staging" && !isfile(joinpath(directory,"completion.toml")) && continue
+        sample_file=joinpath(directory,"samples.csv")
+        unmeasured=!isfile(sample_file)
+        if !unmeasured
+            lines=readlines(sample_file)
+            if isempty(lines)
+                unmeasured=true
+            else
+                phase=findfirst(==("phase"),split(first(lines),','))
+                # An unrecognized or partially changed sample format remains
+                # an integrity error, not a reason to accept old measurements.
+                if !isnothing(phase)
+                    unmeasured=!any(line->begin
+                        fields=split(line,',')
+                        length(fields)>=phase && fields[phase]=="warm"
+                    end,lines[2:end])
+                end
+            end
+        end
+        unmeasured || continue
+        retained=joinpath(output,"unmeasured-attempts",area,id*"-"*string(uuid4()))
+        mkpath(dirname(retained))
+        mv(directory,retained)
+        @warn "Requeued case without timing measurements; old metadata retained" id retained
+    end
+end
+
 function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache_root=nothing,
                                 allow_source_changes::Bool=false,skip_memory_budget::Bool=false)
     cases=expand_cases(config)
@@ -512,6 +545,7 @@ function run_resumable_campaign(config;output,on_progress=nothing,baseline_cache
     _resume_lock(output) do
         limits=get(config,"limits",Dict())
         manifest=_resume_prepare(output,config,cases,limits;allow_source_changes)
+        backend=="benchmarktools" && _requeue_unmeasured_cases!(output,cases)
         execution=_resume_execution(manifest)
         signature=manifest["run_signature"]
         baseline_cache=isnothing(baseline_cache_root) ? nothing :

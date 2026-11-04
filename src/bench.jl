@@ -573,6 +573,36 @@ function _run_native_stage_resumable(command,output,phase,id;on_restart=nothing,
     end
 end
 
+function _queue_unmeasured_campaign_cases!(output,ids)
+    for id in ids
+        archive=joinpath(output,"benchmark",id)
+        isfile(joinpath(archive,"campaign.toml")) || continue
+        config=_technique_archive_config(archive)
+        get(config["campaign"],"backend","")=="benchmarktools" || continue
+        _resume_lock(archive) do
+            cases=expand_cases(config)
+            manifest=TOML.parsefile(joinpath(archive,"campaign.toml"))
+            _requeue_unmeasured_cases!(archive,cases)
+            skipped=_resume_budget_ids(archive,cases,manifest)
+            isempty(skipped) && return
+            # Retry old resource exclusions once on a new controller launch.
+            # Worker restarts in this same launch keep their new exclusions,
+            # preventing an endless retry of a case that still exceeds RAM.
+            retained=joinpath(archive,"unmeasured-attempts","resource-exclusions",
+                string(uuid4()))
+            mkpath(retained)
+            for caseid in skipped
+                mv(joinpath(archive,"budget-skips",caseid*".toml"),
+                    joinpath(retained,caseid*".toml"))
+            end
+            manifest["budget_skipped_ids"]=String[]
+            _resume_write(joinpath(archive,"campaign.toml"),manifest)
+            @warn "Unmeasured resource-excluded cases returned to the timing queue" id count=length(skipped) retained
+        end
+    end
+    nothing
+end
+
 function _refresh_article_before_resume(output;ids=String[],
         refresh=refresh_technique_article,terminal=stdout)
     println(terminal,"Rebuilding article from archived cases before resuming measurements.")
@@ -607,6 +637,10 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
         # later GPU setup cannot change the source fingerprint of a CPU run.
         for project in unique(g.project for g in groups)
             run(`$julia --startup-file=no --threads=1,0 --project=$project -e "using Pkg; Pkg.instantiate()"`)
+        end
+        if phase==:benchmark
+            _queue_unmeasured_campaign_cases!(destination,
+                unique(vcat(getproperty.(groups,:ids)...)))
         end
         if phase==:benchmark &&
                 isdir(joinpath(destination,"benchmark"))

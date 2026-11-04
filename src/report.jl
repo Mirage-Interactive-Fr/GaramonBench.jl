@@ -307,6 +307,8 @@ function _publish_technique_plot(row,rows,parameters,total,figure_root;
     end
     caption=joinpath(figure_root,"plot_technique_"*row["id"]*"_caption.tex")
     _publish_article_text(_technique_caption_text(rows,parameters,total),caption)
+    pending=joinpath(figure_root,"plot_technique_"*row["id"]*"_pending.tex")
+    isfile(pending) && rm(pending)
     figure,caption
 end
 
@@ -419,7 +421,7 @@ function _article_recovery_index(output,processed_root,benchmark_root)
     archives=Dict{String,Vector{String}}()
     visited=Set{String}()
     excluded=Set([".git","sources","revisions","environment","environments",
-        "cases","staging","_baselines","preflight","profiles","compiled","build"])
+        "cases","staging","unmeasured-attempts","_baselines","preflight","profiles","compiled","build"])
     roots=abspath.([processed_root,output,joinpath(benchmark_root,"data"),
         joinpath(benchmark_root,"gpu","data")])
     parent=dirname(abspath(output))
@@ -487,6 +489,30 @@ function _recover_raw_technique_figure(row,archive_paths,processed_root,figure_r
         processed_root,figure_root,compile_article=false)
 end
 
+struct MissingTechniqueMeasurements <: Exception
+    id::String
+    reason::String
+end
+Base.showerror(io::IO,error::MissingTechniqueMeasurements)=print(io,error.reason)
+
+function _mark_technique_measurements_pending(row,figure_root)
+    path=joinpath(figure_root,"plot_technique_"*row["id"]*"_pending.tex")
+    _publish_article_text(
+        "\\textbf{Timing measurements must be completed or repeated.} "*
+        "The earlier curve is excluded because its numerical source could not be verified. "*
+        "This technique remains in the benchmark campaign; no performance conclusion is "*
+        "drawn until validated timing data are available.",path)
+    removed=String[]
+    for suffix in (".pdf","_caption.tex")
+        stale=joinpath(figure_root,"plot_technique_"*row["id"]*suffix)
+        if isfile(stale)
+            rm(stale)
+            push!(removed,stale)
+        end
+    end
+    removed
+end
+
 """Regenerate a retained plot from checksum-verified measurement data.
 The old PDF hash identifies a preferred report, but a unique verified report
 or raw campaign can recover a plot even when that derived PDF has changed.
@@ -494,8 +520,9 @@ or raw campaign can recover a plot even when that derived PDF has changed.
 function _refresh_retained_technique_figure(row,processed_root,figure_root;
         report_paths=nothing,archive_paths=String[],searched_roots=String[])
     figure=joinpath(figure_root,"plot_technique_"*row["id"]*".pdf")
-    isfile(figure) || return nothing
-    digest=_resume_sha(figure)
+    pending=joinpath(figure_root,"plot_technique_"*row["id"]*"_pending.tex")
+    isfile(figure) || isfile(pending) || return nothing
+    digest=isfile(figure) ? _resume_sha(figure) : ""
     directory=joinpath(processed_root,row["id"])
     candidates=Pair{String,Any}[]
     paths=isnothing(report_paths) ? String[] : copy(report_paths)
@@ -530,10 +557,10 @@ function _refresh_retained_technique_figure(row,processed_root,figure_root;
     if isempty(candidates)
         recovered=_recover_raw_technique_figure(row,archive_paths,processed_root,figure_root)
         isnothing(recovered) || return recovered
-        error("Technique "*row["id"]*
+        throw(MissingTechniqueMeasurements(row["id"],"Technique "*row["id"]*
             ": no verified measurement report or compatible raw campaign was found. "*
             "Search roots: "*join(searched_roots,", ")*"; reports: "*join(paths,", ")*"; raw archives: "*
-            join(archive_paths,", ")*". No experiment was run and existing files were kept.")
+            join(archive_paths,", ")*". The previous curve cannot be used as measured evidence."))
     end
     # Report schemas have gained columns over time. Compare the recorded
     # measurements and parameters, rather than treating a CSV layout change
@@ -625,6 +652,7 @@ function refresh_technique_article(output;ids=String[],
     selected=isempty(requested) ? rows : filter(row->row["id"] in requested,rows)
     recovery=_article_recovery_index(output,processed_root,root)
     refreshed=NamedTuple[]
+    pending_measurements=NamedTuple[]
     for row in selected
         archive=joinpath(abspath(output),"benchmark",row["id"])
         isfile(joinpath(archive,"campaign.toml")) || continue
@@ -642,15 +670,23 @@ function refresh_technique_article(output;ids=String[],
     # silently include such a file without regenerating its plot and caption.
     for row in rows
         row["id"] in updated && continue
-        result=_refresh_retained_technique_figure(row,processed_root,figure_root;
-            report_paths=get(recovery.reports,row["id"],String[]),
-            archive_paths=get(recovery.archives,row["id"],String[]),
-            searched_roots=recovery.roots)
+        result=try
+            _refresh_retained_technique_figure(row,processed_root,figure_root;
+                report_paths=get(recovery.reports,row["id"],String[]),
+                archive_paths=get(recovery.archives,row["id"],String[]),
+                searched_roots=recovery.roots)
+        catch exception
+            exception isa MissingTechniqueMeasurements || rethrow()
+            removed=_mark_technique_measurements_pending(row,figure_root)
+            push!(pending_measurements,(;id=row["id"],reason=exception.reason))
+            @warn "Timing measurements are required; legacy curves are not used" id=row["id"] removed reason=exception.reason
+            continue
+        end
         isnothing(result) || push!(refreshed,(;id=row["id"],result...))
     end
     source=joinpath(root,"papers","Garamon_research_article_2026-09-27_en.tex")
     pdf=_compile_bench_article(source,figure_root,paper_root;publish_canonical)
-    (;article_pdf=pdf,figures=refreshed)
+    (;article_pdf=pdf,figures=refreshed,pending_measurements)
 end
 
 function _bench_summary(config,benchmark_output,destination)

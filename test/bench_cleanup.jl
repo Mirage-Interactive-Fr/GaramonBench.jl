@@ -254,13 +254,38 @@ end
         @test read(report.summary_csv)==original_summary
         @test read(parameters_file)==original_parameters
         write(report.summary_csv,"changed summary")
-        @test_throws ErrorException GaramonBench._refresh_retained_technique_figure(
+        @test_throws GaramonBench.MissingTechniqueMeasurements GaramonBench._refresh_retained_technique_figure(
             row,joinpath(root,"processed"),joinpath(root,"plots"))
         write(report.summary_csv,original_summary)
         orphan=Dict("id"=>"16","name"=>"orphan")
         write(joinpath(root,"plots","plot_technique_16.pdf"),"untraceable legacy plot")
-        @test_throws ErrorException GaramonBench._refresh_retained_technique_figure(
+        @test_throws GaramonBench.MissingTechniqueMeasurements GaramonBench._refresh_retained_technique_figure(
             orphan,joinpath(root,"processed"),joinpath(root,"plots"))
+        pending_path=joinpath(root,"plots","plot_technique_16_pending.tex")
+        stale_caption=joinpath(root,"plots","plot_technique_16_caption.tex")
+        write(stale_caption,"old unverified caption")
+        @test_logs (:warn,r"Timing measurements are required") begin
+            partial=refresh_technique_article(joinpath(root,"other-campaign");
+                ids=["16"],processed_root=root,figure_root=joinpath(root,"plots"),
+                paper_root=joinpath(root,"partial-paper"),publish_canonical=false)
+            @test getproperty.(partial.pending_measurements,:id)==["16"]
+            @test getproperty.(partial.figures,:id)==["28"]
+            @test isfile(partial.article_pdf)
+        end
+        @test !isfile(joinpath(root,"plots","plot_technique_16.pdf"))
+        @test !isfile(stale_caption) && isfile(pending_path)
+        # Removing an old plot must not erase the pending measurement request.
+        @test_logs (:warn,r"Timing measurements are required") begin
+            partial=refresh_technique_article(joinpath(root,"other-campaign");
+                ids=["16"],processed_root=root,figure_root=joinpath(root,"plots"),
+                paper_root=joinpath(root,"partial-paper"),publish_canonical=false)
+            @test getproperty.(partial.pending_measurements,:id)==["16"]
+        end
+        # Qualified new data replaces the pending slot automatically.
+        GaramonBench._refresh_technique_benchmark_article(orphan,config,archive;
+            processed_root=joinpath(root,"new-measurements"),
+            figure_root=joinpath(root,"plots"),compile_article=false)
+        @test !isfile(pending_path) && isfile(joinpath(root,"plots","plot_technique_16.pdf"))
         config["campaign"]["condition"]="exploratory_interference"
         @test_throws ErrorException GaramonBench._technique_report_rows(row,config,archive)
         config["campaign"]["condition"]="isolated"

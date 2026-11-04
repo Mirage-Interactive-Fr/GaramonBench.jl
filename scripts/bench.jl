@@ -56,6 +56,11 @@ if settings.phase==:refresh_article
     println("Article: ",result.article_pdf,
         "; measured figures rebuilt: ",length(result.figures))
     println("Rebuilt technique IDs: ",join(sort!(getproperty.(result.figures,:id)),", "))
+    if !isempty(result.pending_measurements)
+        println("Techniques requiring validated timing measurements: ",
+            join(sort!(getproperty.(result.pending_measurements,:id)),", "),
+            ". Earlier unverified curves were excluded; these techniques remain in the campaign.")
+    end
 else
     run_technique_campaign(destination;ids=settings.ids,gpu=settings.gpu,
         phase=settings.phase,allow_source_changes=settings.allow_source_changes,
