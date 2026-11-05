@@ -329,6 +329,7 @@ function run_technique_bench(preflight,output;ids=String[],
             result["status"]="requires_threads"
             result["threads"]=row["threads"]
         else
+            local config
             try
                 technique_smoke_evidence(row,preflight;benchmark_root=root)
                 config=technique_bench_config(row;benchmark_root=root)
