@@ -9,6 +9,7 @@ const _ARTICLE_SUMMARY_GROUPS = (
 
 const _ARTICLE_SUMMARY_TITLES = Dict(
     "01"=>"Dense storage", "02"=>"Direct sparse-vector control",
+    "06"=>"XOR join",
     "08"=>"Prepared vector-product plan", "09"=>"Reused workspace",
     "14"=>"Generated vector-product kernel", "17"=>"Factored bivector reflections",
     "22"=>"Clifford-matrix transform")
@@ -120,16 +121,17 @@ end
 function _render_article_summary(cairo,panels,path)
     _with_article_theme(cairo) do
         columns=min(length(panels),2)
-        figure=cairo.Figure(size=(1000,252*cld(length(panels),columns)),fontsize=19)
+        figure=cairo.Figure(size=(1000,228*cld(length(panels),columns)),fontsize=19)
         for (i,panel) in enumerate(panels)
             regimes=panel.regimes
             x=eachindex(regimes)
+            ticks=length(x)<=10 ? collect(x) : round.(Int,range(first(x),last(x);length=10))
             lower,upper,_=_technique_ratio_limits((;
                 time_ratio=ratio) for r in regimes for ratio in (r.low,r.high))
             axis=cairo.Axis(figure[cld(i,columns),mod1(i,columns)];
                 title=string(Char('A'+i-1),". ",uppercasefirst(panel.title)),
                 xlabel="Algebra dimension (tested values)",ylabel="Warm-time ratio",
-                yscale=log10,xticks=(collect(x),string.(getproperty.(regimes,:n))),
+                yscale=log10,xticks=(ticks,string.(getproperty.(regimes[ticks],:n))),
                 yticks=_technique_ratio_ticks(lower,upper),xticklabelsize=15,
                 xgridvisible=false,ygridcolor=(:gray,0.16))
             cairo.hlines!(axis,[1.0];color=:black,linestyle=:dash)
@@ -158,28 +160,51 @@ function _article_ratio_tex(value)
     prefix*first(number)*(length(number)==2 ? "\\times 10^{"*last(number)*"}" : "")
 end
 
+_article_summary_title(entry)=replace(uppercasefirst(entry.title),
+    "&"=>raw"\&","_"=>raw"\_","%"=>raw"\%")
+
+function _article_summary_highlights(io,panels)
+    candidates=collect(Iterators.take(filter(entry->entry.group in (:robust,:windows),panels),3))
+    isempty(candidates) && return
+    print(io,raw"\par\smallskip\noindent\textbf{Measured highlights.} Median warm-time ",
+        length(candidates)==1 ? "ratio was " : "ratios were ")
+    for (i,entry) in enumerate(candidates)
+        # Pick a representative strong dimension from unanimous results.
+        # Prefer repeated cases when a partial grid includes a singleton.
+        unanimous=filter(r->r.wins==r.cases,entry.regimes)
+        dimensions=isempty(unanimous) ? entry.regimes : unanimous
+        regime=argmin(r->(r.cases<2,r.mid,-r.cases,r.n),dimensions)
+        i>1 && print(io,i==length(candidates) ? " and " : ", ")
+        print(io,raw"$",_article_ratio_tex(regime.mid),raw"$ for \textit{",
+            _article_summary_title(entry),raw"} at $n=",regime.n,raw"$ (",
+            regime.wins,"/",regime.cases,
+            raw" measured cases faster, Figure~\ref{fig:technique-",entry.id,"})")
+    end
+    println(io,raw".\par")
+end
+
 function _article_summary_tex(io,entries,total,panels)
     for entry in entries
         println(io,raw"\expandafter\def\csname verifiedarticleplot",entry.id,raw"\endcsname{}")
     end
+    println(io,raw"\begingroup\small")
     println(io,"Verified paired timings are available for ",length(entries)," of ",total,
         " technique slots. Each ratio \$R\$ is the median warm time divided by the ",
         "median warm time of the reference on the same input.")
     if isempty(entries)
-        println(io," No verified technique timings are available for this build.")
+        println(io,raw" No verified technique timings are available for this build.\par\endgroup")
         return
     end
-    println(io," Measured/planned counts retain incomplete coverage. ",
-        "Each comparison retains its own workload and reference.")
-    println(io)
+    _article_summary_highlights(io,panels)
+    println(io,raw"\par\endgroup")
     if !isempty(panels)
-        println(io,raw"\begin{center}\begin{minipage}{\linewidth}\centering")
-        println(io,raw"\includegraphics[width=\linewidth]{article_performance_summary.pdf}\par\smallskip")
+        println(io,raw"\medskip\noindent\begin{minipage}{\linewidth}\centering")
+        println(io,raw"\includegraphics[width=.96\linewidth]{article_performance_summary.pdf}\par\smallskip")
         println(io,raw"\small Points show the median case ratio at each tested dimension and bars show the observed minimum and maximum. Green indicates that every measured case is faster, orange that only some are faster, and gray that none are faster. The dashed line marks equality.\par")
         for (i,panel) in enumerate(panels)
             println(io,Char('A'+i-1),raw". Figure~\ref{fig:technique-",panel.id,raw"}.\quad")
         end
-        println(io,raw"\end{minipage}\end{center}")
+        println(io,raw"\end{minipage}\par\medskip")
     end
     for (ids,description) in (
             (("08","09","14"),"Complete products of two vectors"),
@@ -191,7 +216,9 @@ function _article_summary_tex(io,entries,total,panels)
             ". Compare the variants on their shared scenarios.\\par")
     end
     println(io,raw"""
-A consistent gain requires at least six measured cases spanning at least two
+Measured/planned counts retain incomplete coverage. Each comparison retains
+its own workload and reference. A consistent gain requires at least six
+measured cases spanning at least two
 dimensions, at least 95\% of ratios below one, and a majority below one at
 every measured dimension. A dimension window requires unanimity at two
 adjacent measured dimensions. Dimensions are listed individually and only
@@ -218,7 +245,7 @@ Technique & Measured & $R<1$ & $R\le 0.90$ & Median & Observed range and dimensi
         isempty(group_entries) && continue
         println(io,raw"\multicolumn{6}{@{}l}{\textbf{",label,raw"}}\\*")
         for entry in group_entries
-            title=replace(uppercasefirst(entry.title),"&"=>raw"\&","_"=>raw"\_","%"=>raw"\%")
+            title=_article_summary_title(entry)
             dims=isempty(entry.unanimous) ? "--" : join(entry.unanimous,", ")
             net=group in (:mixed,:isolated) ? string(entry.net) : "--"
             print(io,title,raw" (Fig.~\ref{fig:technique-",entry.id,

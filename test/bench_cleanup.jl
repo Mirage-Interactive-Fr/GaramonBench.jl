@@ -322,6 +322,13 @@ end
     fragment=sprint(io->GaramonBench._article_summary_tex(io,[window],48,[window]))
     @test occursin(raw"\ref{fig:technique-09}",fragment)
     @test occursin("All faster: 2, 3",fragment)
+    @test occursin("Measured highlights",fragment)
+    @test occursin(raw"$n=3$ (2/2 measured cases faster, Figure~\ref{fig:technique-09})",fragment)
+    @test isempty(sprint(io->GaramonBench._article_summary_highlights(io,[mixed])))
+    nearly_all=entry([2=>vcat(fill(0.75,20),1.01),3=>vcat(fill(0.5,20),1.01)])
+    @test nearly_all.group==:robust && isempty(nearly_all.unanimous)
+    highlight=sprint(io->GaramonBench._article_summary_highlights(io,[nearly_all]))
+    @test occursin(raw"$0.5$ for \textit{Reused workspace} at $n=3$ (20/21 measured cases faster",highlight)
 end
 
 @testset "technique plots distinguish measured scenario categories" begin

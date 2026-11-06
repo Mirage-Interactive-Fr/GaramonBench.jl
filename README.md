@@ -432,7 +432,9 @@ the detailed figures in that build. The overview includes selected
 dimension plots, a table of all verified techniques, coverage counts, and
 links to the detailed figures. Unanimous measured windows use the equality
 threshold. The 10% column describes effect size within mixed or limited
-results. Use the refresh command above for an article-only rebuild, including
+results. Its short highlights paragraph names measured dimensions and reports
+their median warm-time ratios for the highlighted techniques. Use the refresh
+command above for an article-only rebuild, including
 when new completed measurements have arrived.
 
 On benchmark resume, the controller performs this article refresh first,
