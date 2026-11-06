@@ -4,6 +4,8 @@ _article_plotsdir(parts...) = DrWatson.plotsdir(
     joinpath(dirname(@__DIR__),"plots",parts...))
 _article_papersdir(parts...) = DrWatson.papersdir(
     joinpath(dirname(@__DIR__),"papers",parts...))
+_article_processed_techniques() = DrWatson.datadir(
+    joinpath(dirname(@__DIR__),"data","processed","garamonbench","techniques"))
 
 function _bench_phase_times(sample_file,selected_phase)
     lines=readlines(sample_file)
@@ -313,7 +315,7 @@ function _publish_technique_plot(row,rows,parameters,total,figure_root;
 end
 
 function _refresh_technique_benchmark_article(row,config,archive;
-        processed_root=DrWatson.datadir(joinpath(dirname(@__DIR__),"data","processed","garamonbench","techniques")),
+        processed_root=_article_processed_techniques(),
         figure_root=_article_plotsdir("garamonbench","techniques","qualified"),
         compile_article::Bool=true)
     rows,parameters=_technique_report_rows(row,config,archive)
@@ -364,12 +366,12 @@ function _refresh_technique_benchmark_article(row,config,archive;
     if compile_article
         source=joinpath(dirname(@__DIR__),"papers","Garamon_research_article_2026-09-27_en.tex")
         _compile_bench_article(source,figure_root,
-            _article_papersdir("garamonbench","techniques","qualified"))
+            _article_papersdir("garamonbench","techniques","qualified");processed_root)
     end
     (;summary_csv=summary,figure_pdf=figure,completed_cases=length(rows))
 end
 
-function _technique_csv_records(path)
+function _technique_csv_records(path;lines=readlines(path))
     function fields(line)
         result=String[]; buffer=IOBuffer(); quoted=false
         i=firstindex(line)
@@ -393,7 +395,6 @@ function _technique_csv_records(path)
         push!(result,String(take!(buffer)))
         result
     end
-    lines=readlines(path)
     isempty(lines) && error("empty retained report: "*path)
     header=fields(first(lines))
     [begin
@@ -521,7 +522,6 @@ function _refresh_retained_technique_figure(row,processed_root,figure_root;
         report_paths=nothing,archive_paths=String[],searched_roots=String[])
     figure=joinpath(figure_root,"plot_technique_"*row["id"]*".pdf")
     pending=joinpath(figure_root,"plot_technique_"*row["id"]*"_pending.tex")
-    isfile(figure) || isfile(pending) || return nothing
     digest=isfile(figure) ? _resume_sha(figure) : ""
     directory=joinpath(processed_root,row["id"])
     candidates=Pair{String,Any}[]
@@ -532,6 +532,7 @@ function _refresh_retained_technique_figure(row,processed_root,figure_root;
             push!(paths,joinpath(root,"provenance.toml"))
         end
     end
+    isfile(figure) || isfile(pending) || !isempty(paths) || return nothing
     for path in unique(paths)
         provenance=TOML.parsefile(path)
         get(provenance,"technique","")==row["id"] &&
@@ -540,7 +541,7 @@ function _refresh_retained_technique_figure(row,processed_root,figure_root;
             continue
         push!(candidates,path=>provenance)
     end
-    exact=filter(p->get(p.second,"figure_sha256","")==digest,candidates)
+    exact=filter(p->!isempty(digest) && get(p.second,"figure_sha256","")==digest,candidates)
     if !isempty(exact)
         candidates=exact
     else
@@ -584,35 +585,8 @@ function _refresh_retained_technique_figure(row,processed_root,figure_root;
             ": "*join(first.(candidates),", "))
     provenance_path,provenance=first(sort!(candidates;by=first))
     println("Technique ",row["id"],": rebuilding from verified report ",provenance_path)
-    provenance["qualification"]=="isolated_completed_cases_oracle_and_baseline_passed" ||
-        error("unqualified retained report for technique "*row["id"])
+    rows,parameters=_read_verified_technique_report(row["id"],provenance_path,provenance)
     summary=joinpath(dirname(provenance_path),"summary.csv")
-    parameter_file=joinpath(dirname(provenance_path),"case_parameters.toml")
-    _resume_sha(summary)==provenance["summary_sha256"] ||
-        error("retained summary changed for technique "*row["id"])
-    _resume_sha(parameter_file)==provenance["parameters_sha256"] ||
-        error("retained case parameters changed for technique "*row["id"])
-    parameters=TOML.parsefile(parameter_file)
-    rows=[begin
-        id=record["case_id"]
-        record["technique"]==row["id"] && record["condition"]=="isolated" ||
-            error("retained case qualification differs")
-        haskey(parameters,id) && case_id(parameters[id])==id ||
-            error("retained case identity differs")
-        dimension=parse(Int,record["dimension"])
-        dimension==get(parameters[id],"dimension",0) ||
-            error("retained dimension differs")
-        ratio=parse(Float64,record["time_ratio"])
-        candidate=parse(Float64,record["median_ns"])
-        baseline=parse(Float64,record["baseline_median_ns"])
-        isfinite(ratio) && ratio>0 && baseline>0 &&
-            isapprox(ratio,candidate/baseline;rtol=1e-12) ||
-            error("retained paired timing ratio differs")
-        (;case_id=id,dimension,time_ratio=ratio,over_baseline_budget=ratio>10)
-    end for record in _technique_csv_records(summary)]
-    length(rows)==provenance["completed_cases"] &&
-        length(unique(r.case_id for r in rows))==length(rows) ||
-        error("retained completed case count differs")
     skips=NamedTuple[]
     skip_count=get(provenance,"budget_skipped_cases",0)
     if skip_count>0
@@ -636,11 +610,47 @@ function _refresh_retained_technique_figure(row,processed_root,figure_root;
     (;summary_csv=summary,figure_pdf=figure,completed_cases=length(rows))
 end
 
+function _read_verified_technique_report(technique,provenance_path,provenance)
+    provenance["technique"]==technique &&
+        provenance["qualification"]=="isolated_completed_cases_oracle_and_baseline_passed" ||
+        error("unqualified retained report for technique "*technique)
+    summary=joinpath(dirname(provenance_path),"summary.csv")
+    parameter_file=joinpath(dirname(provenance_path),"case_parameters.toml")
+    summary_bytes=read(summary)
+    parameter_bytes=read(parameter_file)
+    bytes2hex(sha256(summary_bytes))==provenance["summary_sha256"] ||
+        error("retained summary changed for technique "*technique)
+    bytes2hex(sha256(parameter_bytes))==provenance["parameters_sha256"] ||
+        error("retained case parameters changed for technique "*technique)
+    parameters=TOML.parse(String(parameter_bytes))
+    rows=[begin
+        id=record["case_id"]
+        record["technique"]==technique && record["condition"]=="isolated" ||
+            error("retained case qualification differs")
+        haskey(parameters,id) && case_id(parameters[id])==id ||
+            error("retained case identity differs")
+        dimension=parse(Int,record["dimension"])
+        dimension==get(parameters[id],"dimension",0) ||
+            error("retained dimension differs")
+        ratio=parse(Float64,record["time_ratio"])
+        candidate=parse(Float64,record["median_ns"])
+        baseline=parse(Float64,record["baseline_median_ns"])
+        isfinite(ratio) && ratio>0 && baseline>0 &&
+            isapprox(ratio,candidate/baseline;rtol=1e-12) ||
+            error("retained paired timing ratio differs")
+        (;case_id=id,dimension,time_ratio=ratio,over_baseline_budget=ratio>10)
+    end for record in _technique_csv_records(summary;lines=readlines(IOBuffer(summary_bytes)))]
+    0<length(rows)==provenance["completed_cases"]<=provenance["total_cases"] &&
+        length(unique(r.case_id for r in rows))==length(rows) ||
+        error("retained completed case count differs")
+    rows,parameters
+end
+
 """Rebuild all visible article figures from validated archived cases or their
 verified retained reports, without running an experiment.
 """
 function refresh_technique_article(output;ids=String[],
-        processed_root=DrWatson.datadir(joinpath(dirname(@__DIR__),"data","processed","garamonbench","techniques")),
+        processed_root=_article_processed_techniques(),
         figure_root=_article_plotsdir("garamonbench","techniques","qualified"),
         paper_root=_article_papersdir("garamonbench","techniques","qualified"),
         publish_canonical::Bool=true)
@@ -685,7 +695,12 @@ function refresh_technique_article(output;ids=String[],
         isnothing(result) || push!(refreshed,(;id=row["id"],result...))
     end
     source=joinpath(root,"papers","Garamon_research_article_2026-09-27_en.tex")
-    pdf=_compile_bench_article(source,figure_root,paper_root;publish_canonical)
+    for result in refreshed
+        push!(get!(recovery.reports,result.id,String[]),
+            joinpath(dirname(result.summary_csv),"provenance.toml"))
+    end
+    pdf=_compile_bench_article(source,figure_root,paper_root;
+        publish_canonical,processed_root,summary_report_paths=recovery.reports)
     (;article_pdf=pdf,figures=refreshed,pending_measurements)
 end
 
@@ -862,7 +877,8 @@ function _publish_article_text(content,destination)
 end
 
 function _compile_bench_article(tex_source,plot_dir,paper_dir;
-    publish_canonical::Bool=true)
+    publish_canonical::Bool=true,processed_root=_article_processed_techniques(),
+    summary_report_paths=nothing)
     compiler=Sys.which("latexmk")
     isnothing(compiler) && error("latexmk is required to compile the article after benchmarking")
     tex_source=abspath(tex_source)
@@ -878,7 +894,12 @@ function _compile_bench_article(tex_source,plot_dir,paper_dir;
         cp(tex_source,staged_source)
         preflight=_article_plotsdir("garamonbench","techniques","preflight")
         qualified=_article_plotsdir("garamonbench","techniques","qualified")
-        texinputs=join((plot_dir,qualified,preflight,dirname(tex_source)),':')*":"
+        figure_roots=(plot_dir,qualified,preflight,dirname(tex_source))
+        if occursin(raw"\InputIfFileExists{article_performance_summary.tex}",read(staged_source,String))
+            _stage_article_performance_summary(auxiliary,figure_roots,processed_root;
+                report_paths=summary_report_paths)
+        end
+        texinputs=join((auxiliary,figure_roots...),':')*":"
         command=Cmd(`$compiler -pdf -silent -interaction=nonstopmode -halt-on-error -auxdir=$auxiliary -outdir=$isolated_output $staged_source`;
             dir=auxiliary)
         logfile=joinpath(auxiliary,"latexmk.log")

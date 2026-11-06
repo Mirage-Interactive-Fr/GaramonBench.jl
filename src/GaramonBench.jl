@@ -39,6 +39,7 @@ include("bounds_b1.jl")
 include("cli.jl")
 include(joinpath(@__DIR__, "..", "adapters", "external_ga_vector_product.jl"))
 include("report.jl")
+include("article_summary.jl")
 include("bench.jl")
 
 function __init__()

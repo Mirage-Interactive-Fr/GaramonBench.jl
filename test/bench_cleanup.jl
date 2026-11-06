@@ -219,6 +219,14 @@ end
             figure_root=joinpath(root,"raw-plots"),paper_root=joinpath(root,"raw-paper"),
             publish_canonical=false)
         @test getproperty.(from_raw.figures,:completed_cases)==[2]
+        text_tool=Sys.which("pdftotext")
+        if !isnothing(text_tool)
+            first_pages=read(Cmd([text_tool,"-f","1","-l","3","-layout",from_raw.article_pdf,"-"]),String)
+            @test occursin("Benchmark results at a glance",first_pages)
+            @test occursin("Verified paired timings are available for 1 of",first_pages)
+            @test occursin("No observed gain",first_pages)
+            @test occursin("2/3",first_pages)
+        end
         recovered_config=GaramonBench._technique_archive_config(archive)
         @test recovered_config==config
         discovery=GaramonBench._article_recovery_index(joinpath(root,"another-campaign"),
@@ -292,6 +300,28 @@ end
         write(cache_path,"changed cached baseline")
         @test_throws ErrorException GaramonBench._technique_report_rows(row,config,archive)
     end
+end
+
+@testset "article synthesis separates unanimity from effect size" begin
+    function entry(ratios;id="09",contract="exact")
+        rows=[(;dimension=n,time_ratio=ratio) for (n,values) in ratios for ratio in values]
+        GaramonBench._article_performance_entry(
+            Dict("id"=>id,"name"=>"fixture","contract"=>contract),rows,length(rows)+2)
+    end
+    modest=entry([2=>[0.99,0.9999,0.98],3=>[0.98,0.97,0.96]])
+    @test modest.group==:robust && modest.net==0 && modest.planned==8
+    window=entry([2=>[0.99,0.9999],3=>[0.98,0.97],4=>[1.1,1.2]])
+    @test window.group==:windows && window.unanimous==[2,3]
+    mixed=entry([2=>[0.5,0.9,1.3],3=>[0.7,0.98,1.4]])
+    @test mixed.group==:mixed && mixed.wins==4 && mixed.net==3
+    @test entry([2=>[0.3,0.8],3=>[0.4,1.2]]).group==:isolated
+    @test entry([2=>[1.0,1.2]]).group==:none
+    @test entry([2=>[0.5]];id="02").group==:control
+    @test entry([2=>[0.5]];contract="approximate").group==:approximate
+    @test startswith(GaramonBench._article_ratio_tex(0.9999),"1-")
+    fragment=sprint(io->GaramonBench._article_summary_tex(io,[window],48,[window]))
+    @test occursin(raw"\ref{fig:technique-09}",fragment)
+    @test occursin("All faster: 2, 3",fragment)
 end
 
 @testset "technique plots distinguish measured scenario categories" begin

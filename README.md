@@ -406,10 +406,10 @@ figures.
 
 After each completed technique, `run_technique_bench` exports its paired
 timing summary to `data/processed/garamonbench/techniques/`, with a parameter
-table and provenance. It renders an XKCDMakie vector PDF in the method's
+table and provenance. It renders a CairoMakie vector PDF in the method's
 existing article slot and compiles the article. Each point compares the
-strategy with its Garamon.jl baseline on the same inputs; triangles mark
-times above 10× baseline. The CSV retains the uncapped ratios.
+strategy with its Garamon.jl baseline on the same inputs. The CSV retains
+the uncapped ratios.
 Each qualified figure also receives a data-specific caption explaining its
 color and marker axes; the manuscript cites every technique figure beside
 the corresponding method discussion. The caption distinguishes the warm-time
@@ -426,10 +426,20 @@ campaign:
 julia scripts/bench.jl --refresh-article --output=/path/to/existing/campaign
 ~~~
 
+Every Julia-managed article build regenerates the English results overview
+after the abstract. It uses checksum-verified paired summaries matched to
+the detailed figures in that build. The overview includes selected
+dimension plots, a table of all verified techniques, coverage counts, and
+links to the detailed figures. Unanimous measured windows use the equality
+threshold. The 10% column describes effect size within mixed or limited
+results. Use the refresh command above for an article-only rebuild, including
+when new completed measurements have arrived.
+
 On benchmark resume, the controller performs this article refresh first,
 before preflights or timing workers start. If rendering or LaTeX compilation
-fails, the benchmark does not resume. The refreshed plots distinguish varying
-scenario axes by color and marker; the derived CSV also exposes those axes.
+fails, the controller reports the error and continues the benchmark. The
+refreshed plots distinguish varying scenario axes by color and marker; the
+derived CSV also exposes those axes.
 Stopping with Ctrl-C retains completed cases. After an output-code update,
 resume with the original command and `--allow-source-changes`; validated cases
 are checked and skipped. Keep the same `--output` and any original `--ids` or
