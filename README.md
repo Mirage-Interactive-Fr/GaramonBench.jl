@@ -163,6 +163,24 @@ privileges are required. To use another writable location, pass
 `output=joinpath(homedir(), "garamonbench", "run-001")` and reuse that exact
 path when resuming.
 
+The full launch includes three additional archives under `benchmark/`:
+
+- `E3` compares the same EGA3 vector product at Float32 in Garamon.jl,
+  Garamon C++, GAL, Versor and Klein. Klein uses planes through the origin.
+- `C3` sweeps Float16, Float32, Float64 and BigFloat for Garamon.jl, with
+  Garamon C++ in the Float32 and Float64 panels. The `precision` axis and
+  `bigfloat_bits` (default 256) are in
+  `config/cross_library_oracle_preflight.toml`. To narrow the C3 sweep,
+  set `benchmark_grid.precision` for C3 in `config/techniques.toml`
+  before creating its archive, or use a separate archive for a changed grid.
+- `K4` runs all sixteen subsets of dense storage, reusable workspaces,
+  factored reflections and Givens rotations on one exact bivector workload.
+  It uses dimensions 3, 5 and 8, batch sizes 1 and 32, and two seeds.
+
+The article uses the qualified cases from these archives. External plots
+show warm nanoseconds per product after operand preparation. The factorial
+plot shows the paired warm-time ratio against the all-off reference.
+
 If an explicitly requested new output directory is denied by filesystem
 permissions, the code warns and selects a deterministic directory under
 `data/garamonbench/output-fallback/`. Repeating the original call resolves to
@@ -273,10 +291,10 @@ On the dedicated machine, after confirming it has no competing workload:
 bench(isolated=true)
 ~~~
 
-The isolation flag records the operator's declaration; it cannot reserve
-the machine automatically. Once all cases pass, the qualified EGA3 plot
-replaces its article placeholder. Other article slots remain empty until
-their own campaigns provide qualified data.
+The isolation flag records the operator's declaration. This historical
+standalone comparison still writes its own CSV and PDF chart. The
+article's cross-library figures use the dedicated campaign's E3 and C3
+archives.
 
 To place data on a dedicated volume:
 
@@ -399,7 +417,7 @@ complete `benchmark/` directory, including `_baselines/`, to preserve these
 references. Routes without a proved common input identity retain separate
 baseline measurements.
 Inspect `technique_bench_plan()` for route case counts before starting a large
-campaign. The article currently has 48 figure slots, one per registry entry.
+campaign. The article currently has 51 result slots, one per scheduled route.
 Preflight cards fill empty slots temporarily; only qualified completed
 performance data from the dedicated machine may replace them with benchmark
 figures.

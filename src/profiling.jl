@@ -41,9 +41,9 @@ function _profile_plan_loaded(input)
         all(get(row["case"],key,nothing)==get(case,key,nothing)
             for key in ("adapter","strategy","operation")),
         technique_smoke_plan(;benchmark_root=root))
-    length(smoke)<=1 || error("ambiguous technique profile registration")
-    generic_adapter=isempty(smoke) ? nothing :
-        abspath(joinpath(root,only(smoke)["adapter"]))
+    adapters=unique(abspath(joinpath(root,row["adapter"])) for row in smoke)
+    length(adapters)<=1 || error("ambiguous technique profile registration")
+    generic_adapter=isempty(adapters) ? nothing : only(adapters)
     adapter_case=case["adapter"]=="garamon_generated_product" &&
         case["family"]=="bounded_generated_product" &&
         case["dimension"] isa Integer && 2<=case["dimension"]<=16 &&

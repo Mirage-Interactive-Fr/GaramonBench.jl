@@ -28,17 +28,6 @@
 \textbf{#2.}\enspace #3\par}
 \newcommand{\techniquebacklink}[1]{%
 \hyperref[explain:technique-#1]{Explanation on p.~\pageref*{explain:technique-#1}}.}
-\newcommand{\pendingfigure}[4]{%
-\begin{figure}[!thp]
-\centering
-\IfFileExists{#1}{\includegraphics[width=.88\linewidth]{#1}}{%
-\fbox{\parbox[c][18mm][c]{.84\linewidth}{\centering
-\textbf{Awaiting dedicated benchmark data}\\[2mm]
-\small #2}}}
-\caption[#2]{\textbf{#2} #3
-\hyperref[explain:#4]{Explanation on p.~\pageref*{explain:#4}}.}
-\label{#4}
-\end{figure}\FloatBarrier}
 \newcommand{\techniqueifpending}[3]{%
 \ifcsname verifiedarticleplot#1\endcsname #3%
 \else\IfFileExists{plot_technique_#1_pending.tex}{#2}{#3}\fi}
@@ -59,7 +48,7 @@
 \textbf{One independent oracle case passed}\\[2mm]
 \small No qualified timing is shown in this slot.}}}{%
 \fbox{\parbox[c][18mm][c]{.84\linewidth}{\centering
-\textbf{Figure file unavailable in this build}\\[2mm]
+\textbf{Timing measurements pending}\\[2mm]
 \small #2}}}}
 \IfFileExists{plot_technique_#1.pdf}{%
 \IfFileExists{plot_technique_#1_caption.tex}{%
@@ -258,29 +247,37 @@ relative execution speed.}
 \label{tab:design}
 \end{table}
 
-\phantomsection\label{explain:fig:matched}Figure~\ref{fig:matched}
-reserves the matched C++/Julia comparison, while
-\phantomsection\label{explain:fig:external-ga}Figure~\ref{fig:external-ga}
-reserves the separate comparison
-with other GA libraries. Neither slot represents a completed
-cross-library measurement in this article.
+\techniqueguide{C3}{Figure~\ref{fig:technique-C3}: the effect of precision on Garamon vector products}
+{This comparison measures the complete geometric product of two vectors in
+three-dimensional Euclidean algebra. Each request
+supplies two vectors with all three coordinates present and returns four
+owned coefficients in the order \(1,e_{12},e_{13},e_{23}\). Julia uses
+direct sparse products, a prepared product with a reusable workspace, or
+packed batch evaluation at \code{Float16}, \code{Float32}, \code{Float64},
+and the configured \code{BigFloat} precision (256 bits by default).
+The generated Garamon C++ \code{e3ga} API enters the \code{Float32}
+and \code{Float64} panels. Batches contain 1, 32, or 1,024 independent requests from
+the same seeded inputs. Every route prepares its operands before warm
+timing. The measured batch includes all products and allocation and
+extraction of the owned output. Native routes include one foreign-function
+call per batch. JIT compilation, generation of C++ code, and operand
+preparation have separate phases. The small integer-valued inputs and
+results are exactly representable in all the tested types. These cases
+measure support and timing at each precision.}
+\techniqueplot{C3}{Garamon vector products by coefficient precision}
 
-\pendingfigure{plot_cpp_julia_matched.pdf}
-{Matched C++ and Julia routes.}
-{Purpose: compare the Garamon C++ generator and Garamon.jl on identical
-geometric-algebra requests and complete owned outputs. Dimensions, input
-support, metric, and reuse horizon must be matched before a speed ratio is
-defined. Preparation and generated-code compilation are recorded separately
-from warm execution and the full episode. This slot has no qualified
-cross-language measurement yet.}{fig:matched}
-
-\pendingfigure{qualified_ega3_vector_libraries.pdf}
-{EGA3 vector products across GA libraries.}
-{Purpose: compare complete EGA3 vector products on the same seeded 1,024
-request episode in Garamon.jl, GAL, and Versor, with the same output
-contract. The reported quantity will be median time per batch; preparation,
-conversion, and version/implementation differences need separate context.
-This slot does not currently rank the libraries.}{fig:external-ga}
+\techniqueguide{E3}{Figure~\ref{fig:technique-E3}: the common 3D workload across libraries}
+{This comparison uses the same inputs, batch sizes and four output
+coefficients as Figure~\ref{fig:technique-C3}, with all routes evaluated
+in \code{Float32}. It compares direct and workspace Garamon.jl, generated
+Garamon C++, GAL, Versor, and Klein. Klein implements 3D projective geometric
+algebra. Its route represents each Euclidean input as the normal of a plane
+through the origin, so the product is confined to the Euclidean
+subalgebra. Its \(e_{31}\) coefficient is negated to return \(e_{13}\).
+An integer coordinate oracle verifies the four coefficients for every
+request. The figure compares warm batch implementations of this particular
+operation at the same precision.}
+\techniqueplot{E3}{Garamon.jl, Garamon C++, GAL, Versor and Klein in Float32}
 
 \section{Workloads that must not be conflated}
 A measurement is meaningful only after the task and ownership of its
@@ -1491,6 +1488,28 @@ demonstrated. It is a design aid. The conditions in
 static certificate before the corresponding combination is
 measured. Exact-mode admission always overrides a heuristic
 speed prediction.
+
+\techniqueguide{K4}{Figure~\ref{fig:technique-K4}: measuring interactions between four techniques}
+{Every case transforms a bivector \(u\wedge v\) by two reflections
+followed by two plane rotations, returning every grade-two coefficient
+in exact rational arithmetic. The tests cover Euclidean dimensions 3, 5,
+and 8, batches of 1 and 32 requests, and two input seeds per cell.
+The reference expands \(u\wedge v\) in sparse storage, applies each
+reflection as two direct geometric products, then applies the exterior
+extension of the composed rotation matrix. The letters give the changes
+relative to that reference. \textbf{D} stores multivectors as full
+\(2^n\)-coefficient arrays. \textbf{W} reuses a prepared product workspace
+for each product step and request across evaluations of the batch.
+\textbf{R} reflects the two vector factors separately and forms their
+wedge after the rotations, so it bypasses the expanded reflection products.
+\textbf{G} applies the rotations one plane at a time instead of using the
+composed matrix. With R enabled, G acts on each vector factor. With R
+disabled, G acts on the expanded bivector. The complete design contains
+the reference, four single changes, six pairs, four triples, and all four
+changes together. Ratios below one indicate less warm time on this
+workload. Comparing a combination with its constituent variants on the
+same inputs reveals where the changes reinforce or offset one another.}
+\techniqueplot{K4}{Factorial comparison of dense storage, workspace reuse, factored reflections and Givens rotations}
 
 \section{Reproducible experimental program}
 \subsection{Qualification before timing}

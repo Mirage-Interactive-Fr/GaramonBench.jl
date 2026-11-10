@@ -32,6 +32,8 @@ function register_adapter!(adapter::BenchmarkAdapter; replace=false)
     return adapter
 end
 
+_constraint_values(value) = value isa AbstractVector ? value : (value,)
+
 function load_config(path)
     config=TOML.parsefile(path)
     get(config,"schema_version",0)==SCHEMA_VERSION || error("unsupported schema")
@@ -46,13 +48,17 @@ function load_config(path)
         haskey(rule,"when") && haskey(rule,"require") ||
             error("case constraint needs when and require")
         for (key,value) in merge(rule["when"],rule["require"])
-            haskey(config["grid"],key) && value in config["grid"][key] ||
+            allowed=_constraint_values(value)
+            haskey(config["grid"],key) && !isempty(allowed) &&
+                all(in(config["grid"][key]),allowed) ||
                 error("case constraint refers to an absent grid value")
         end
     end
     config["config_path"]=abspath(path)
     return config
 end
+
+_case_constraint_matches(item,key,value) = get(item,key,nothing) in _constraint_values(value)
 
 # Canonical TOML, rather than Julia's process-dependent hash(), is the identity.
 function canonical_toml(value)
@@ -72,11 +78,11 @@ function expand_cases(config)
     # Smoke plans collapse the grid after `load_config` validated the original
     # rules. A rule whose `when` value was removed cannot constrain that plan.
     constraints=[rule for rule in get(config,"case_constraints",Any[])
-        if all(haskey(config["grid"],key) && value in config["grid"][key]
+        if all(haskey(config["grid"],key) && any(in(config["grid"][key]),_constraint_values(value))
             for (key,value) in rule["when"])]
     filter!(cases) do item
-        all(rule->!all(get(item,key,nothing)==value for (key,value) in rule["when"]) ||
-            all(get(item,key,nothing)==value for (key,value) in rule["require"]),
+        all(rule->!all(_case_constraint_matches(item,key,value) for (key,value) in rule["when"]) ||
+            all(_case_constraint_matches(item,key,value) for (key,value) in rule["require"]),
             constraints)
     end
     length(cases)<=get(get(config,"limits",Dict()),"max_cases",256) || error("case budget")

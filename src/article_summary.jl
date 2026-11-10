@@ -60,11 +60,36 @@ function _article_visible_asset(roots,filename)
     nothing
 end
 
+function _article_extension_entry(technique,report)
+    id=technique["id"]
+    rows,parameters=report.rows,report.parameters
+    if id=="K4"
+        groups=Dict{Tuple{Int,Int,String},Vector{Float64}}()
+        for row in rows
+            case=parameters[row.case_id]
+            key=(row.dimension,case["horizon"],case["scenario"])
+            push!(get!(groups,key,Float64[]),row.time_ratio)
+        end
+        details=[(;dimension=n,horizon,variant,ratio=median(ratios))
+            for ((n,horizon,variant),ratios) in groups
+            if variant!="reference" && length(ratios)==2]
+    else
+        details=[begin
+            case=parameters[row.case_id]
+            horizon=case["horizon"]
+            (;horizon,precision=_cross_precision_label(case),
+                route=_CROSS_LIBRARY_LABELS[case["scenario"]],
+                ns=row.median_ns/horizon,ratio=row.time_ratio)
+        end for row in rows]
+    end
+    (;id,group=:extension,cases=length(rows),planned=report.total,details)
+end
+
 function _article_visible_measurements(directory,figure_roots,processed_root;
         report_paths=nothing)
     root=dirname(@__DIR__)
     registry=TOML.parsefile(joinpath(root,"config","techniques.toml"))
-    techniques=vcat(registry["technique"],get(registry,"combination",Any[]))
+    techniques=_registered_benchmark_entries(registry)
     entries=NamedTuple[]
     for technique in techniques
         id=technique["id"]
@@ -97,8 +122,10 @@ function _article_visible_measurements(directory,figure_roots,processed_root;
         _resume_sha(staged)==digest ||
             error("Article figure changed during compilation for technique "*id)
         write(joinpath(directory,stem*"_caption.tex"),
-            _technique_caption_text(report.rows,report.parameters,report.total))
-        push!(entries,_article_performance_entry(technique,report.rows,report.total))
+            _technique_caption_text(report.rows,report.parameters,report.total;id))
+        entry=id in ("E3","C3","K4") ? _article_extension_entry(technique,report) :
+            _article_performance_entry(technique,report.rows,report.total)
+        push!(entries,entry)
     end
     entries,length(techniques)
 end
@@ -113,7 +140,7 @@ function _article_summary_panels(entries)
     if isempty(panels)
         # Show an example from the available coverage even before a clear
         # winning regime has emerged.
-        append!(panels,Iterators.take(entries,1))
+        append!(panels,Iterators.take(filter(entry->entry.group!=:extension,entries),1))
     end
     panels
 end
@@ -183,19 +210,53 @@ function _article_summary_highlights(io,panels)
     println(io,raw".\par")
 end
 
+function _article_extension_highlights(io,entries)
+    for id in ("C3","E3","K4")
+        index=findfirst(entry->entry.id==id,entries)
+        isnothing(index) && continue
+        entry=entries[index]
+        title=id=="C3" ? "Garamon Julia/C++ by precision" :
+            id=="E3" ? "3D library comparison (Float32)" : "Four-technique combinations"
+        print(io,raw"\par\smallskip\noindent\textbf{",title,raw".} Figure~\ref{fig:technique-",
+            id,"} has ",entry.cases,"/",entry.planned," qualified cases. ")
+        if id=="K4"
+            if isempty(entry.details)
+                println(io,"No variant has both seeds measured at one dimension and batch size yet.")
+            else
+                best=argmin(d->(d.ratio,d.dimension,d.horizon,d.variant),entry.details)
+                println(io,"The lowest measured two-seed median ratio is ",
+                    raw"$",_article_ratio_tex(best.ratio),raw"$ for \code{",best.variant,
+                    raw"} at $n=",best.dimension,raw"$ with ",best.horizon," request(s) per batch.")
+            end
+        else
+            println(io,"Lowest measured warm time per precision across the available batch sizes. ")
+            for precision in sort!(unique(d.precision for d in entry.details))
+                best=argmin(d->(d.ns,d.horizon,d.route),
+                    filter(d->d.precision==precision,entry.details))
+                count_routes=count(d->d.precision==precision && d.horizon==best.horizon,entry.details)
+                print(io,precision,", ",best.horizon," request(s), ",best.route,raw" at $",
+                    _article_ratio_tex(best.ns),raw"$ ns/product (",
+                    count_routes," routes measured in that batch size). ")
+            end
+        end
+        println(io,raw"\par")
+    end
+end
+
 function _article_summary_tex(io,entries,total,panels)
     for entry in entries
         println(io,raw"\expandafter\def\csname verifiedarticleplot",entry.id,raw"\endcsname{}")
     end
     println(io,raw"\begingroup\small")
     println(io,"Verified paired timings are available for ",length(entries)," of ",total,
-        " technique slots. Each ratio \$R\$ is the median warm time divided by the ",
+        " result slots. Each ratio \$R\$ is the median warm time divided by the ",
         "median warm time of the reference on the same input.")
     if isempty(entries)
         println(io,raw" No verified technique timings are available for this build.\par\endgroup")
         return
     end
     _article_summary_highlights(io,panels)
+    _article_extension_highlights(io,entries)
     println(io,raw"\par\endgroup")
     if !isempty(panels)
         println(io,raw"\medskip\noindent\begin{minipage}{\linewidth}\centering")
@@ -215,6 +276,7 @@ function _article_summary_tex(io,entries,total,panels)
         println(io,raw"\par\noindent\textbf{",description,".} ",links,
             ". Compare the variants on their shared scenarios.\\par")
     end
+    any(entry->entry.group!=:extension,entries) || return
     println(io,raw"""
 Measured/planned counts retain incomplete coverage. Each comparison retains
 its own workload and reference. A consistent gain requires at least six

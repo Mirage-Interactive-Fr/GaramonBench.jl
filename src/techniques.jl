@@ -44,8 +44,11 @@ function technique_inventory(;benchmark_root=dirname(@__DIR__),
             "preflight_qualified"=>false,"perfchecker_profile_qualified"=>false))
     end
     combinations=get(registry,"combination",[])
-    all(c->all(in(ids),c["techniques"]) && isfile(joinpath(julia_root,c["source"])) &&
-        isfile(joinpath(julia_root,c["test"])),combinations) ||
+    all(combinations) do c
+        root=get(c,"source_repository","julia")=="benchmark" ? benchmark_root : julia_root
+        all(in(ids),c["techniques"]) && isfile(joinpath(root,c["source"])) &&
+        isfile(joinpath(root,c["test"]))
+    end ||
         error("declared combination source or test is unavailable")
     matrix=compatibility_matrix(joinpath(benchmark_root,registry["compatibility_matrix"]))
     Set(keys(registry["compatibility_conditions"]))==Set("C"*string(n) for n in 1:20) ||

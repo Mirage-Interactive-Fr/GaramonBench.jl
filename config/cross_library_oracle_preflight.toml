@@ -1,0 +1,40 @@
+schema_version = 1
+
+[campaign]
+condition = "exploratory_interference"
+interference_label = "correctness_only"
+backend = "oracle_preflight"
+seed = 20260929
+
+[repositories]
+julia = {env = "GARAMON_JULIA_ROOT", default = "~/.julia/dev/Garamon"}
+
+[case_defaults]
+adapter = "garamon_cross_library"
+family = "vectors"
+signature = "positive"
+bigfloat_bits = 256
+output_contract = "owned_all_coefficients_masks_0_3_5_6"
+
+[grid]
+dimension = [3]
+horizon = [1, 32, 1024]
+precision = ["Float16", "Float32", "Float64", "BigFloat"]
+scenario = ["garamon_direct", "garamon_workspace", "garamon_packed", "garamon_cpp", "gal", "versor", "klein"]
+
+[[case_constraints]]
+when = {scenario = "klein"}
+require = {precision = "Float32"}
+
+[[case_constraints]]
+when = {scenario = ["garamon_cpp", "gal", "versor"]}
+require = {precision = ["Float32", "Float64"]}
+
+[limits]
+max_cases = 84
+samples = 31
+case_seconds = 900
+controller_rss_bytes = 4294967296
+build_disk_bytes = 268435456
+source_snapshot_bytes = 67108864
+archive_bytes = 268435456

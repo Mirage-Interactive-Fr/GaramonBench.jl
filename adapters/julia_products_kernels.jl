@@ -37,17 +37,18 @@ function gb_generate_vectors(case,directory,rng)
         strategy=case["strategy"])
 end
 
-function gb_prepare_vectors(fixture,case,directory)
-    ga=if fixture.signature=="positive"
+function gb_prepare_vectors(fixture,case,directory;
+                            scalar_type::Type{F}=Float64) where {F<:AbstractFloat}
+    ga=if F===Float64 && fixture.signature=="positive"
         algebra(fixture.n,:ega)
     else
-        metric=zeros(Int64,fixture.n,fixture.n)
+        metric=zeros(F===Float64 ? Int64 : F,fixture.n,fixture.n)
         for i in 1:fixture.n
             metric[i,i]=fixture.diagonal[i]
         end
         algebra(metric)
     end
-    inputs=[map(c->multivector(ga,Dict(mask=>Float64(c[i]) for (i,mask) in enumerate(fixture.masks));
+    inputs=[map(c->multivector(ga,Dict(mask=>F(c[i]) for (i,mask) in enumerate(fixture.masks));
                                storage=:sparse),pair) for pair in fixture.coefficients]
     if fixture.strategy in ("workspace","prepared","packed")
         plan=prepare_product(inputs[1]...;max_paths=16384)
@@ -70,7 +71,7 @@ end
 
 function gb_execute_vectors(state)
     f=state.fixture
-    output=Matrix{Float64}(undef,length(f.output_masks),f.horizon)
+    output=Matrix{eltype(state.inputs[1][1])}(undef,length(f.output_masks),f.horizon)
     if f.strategy=="packed"
         values=run_packed_batch(state.batch)
         for t in 1:f.horizon, i in eachindex(state.positions)
@@ -103,7 +104,7 @@ end
 
 function gb_execute_vectors_baseline(state)
     fixture=state.fixture
-    output=Matrix{Float64}(undef,length(fixture.output_masks),fixture.horizon)
+    output=Matrix{eltype(state.inputs[1][1])}(undef,length(fixture.output_masks),fixture.horizon)
     for t in 1:fixture.horizon
         result=geometric_product(state.inputs[t]...)
         gb_copy_coefficients!(output,t,fixture.output_masks,result)

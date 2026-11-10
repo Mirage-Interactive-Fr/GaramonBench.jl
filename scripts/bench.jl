@@ -1,6 +1,6 @@
 # Launch from any working directory: julia /path/to/GaramonBench/scripts/bench.jl
 if "--help" in ARGS
-    println("Usage: julia scripts/bench.jl [--preflight|--refresh-article] [--ids=17,18] [--output=PATH] [--allow-source-changes] [--gpu=auto|required|off] [--no-progress]")
+    println("Usage: julia scripts/bench.jl [--preflight|--refresh-article] [--ids=17,18] [--output=PATH] [--allow-source-changes] [--gpu=auto|required|off] [--no-progress] [--skip-initial-article-refresh]")
     println("The default runs the dedicated-machine technique campaign. Repeat the same options to resume.")
     exit()
 end
@@ -12,6 +12,7 @@ function options(args)
     phase=:benchmark
     allow_source_changes=false
     show_progress=true
+    refresh_article_on_resume=true
     for arg in args
         if arg=="--preflight"
             phase=:preflight
@@ -21,6 +22,8 @@ function options(args)
             allow_source_changes=true
         elseif arg=="--no-progress"
             show_progress=false
+        elseif arg=="--skip-initial-article-refresh"
+            refresh_article_on_resume=false
         elseif startswith(arg,"--ids=")
             ids=split(arg[7:end],',')
         elseif startswith(arg,"--output=")
@@ -32,7 +35,7 @@ function options(args)
             error("Unknown option: "*arg*"; use --help")
         end
     end
-    (;ids,output,gpu,phase,allow_source_changes,show_progress)
+    (;ids,output,gpu,phase,allow_source_changes,show_progress,refresh_article_on_resume)
 end
 settings=options(ARGS)
 
@@ -64,5 +67,6 @@ if settings.phase==:refresh_article
 else
     run_technique_campaign(destination;ids=settings.ids,gpu=settings.gpu,
         phase=settings.phase,allow_source_changes=settings.allow_source_changes,
-        show_progress=settings.show_progress)
+        show_progress=settings.show_progress,
+        refresh_article_on_resume=settings.refresh_article_on_resume)
 end

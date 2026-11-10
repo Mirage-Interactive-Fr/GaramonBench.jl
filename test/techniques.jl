@@ -30,21 +30,24 @@
     @test matrix[("01","25")]=="C12"
     @test matrix[("25","01")]=="C12"
     smoke=technique_smoke_plan()
-    @test length(smoke)==48
-    @test count(row->row["status"]=="runnable",smoke)==48
+    @test length(smoke)==51
+    @test count(row->row["status"]=="runnable",smoke)==51
     @test count(row->row["status"]=="adapter_missing",smoke)==0
     @test count(row->row["status"]=="research_not_implemented",smoke)==0
     runnable=filter(row->row["status"]=="runnable",smoke)
-    @test length(unique(row["case_id"] for row in runnable))==48
-    @test Set(row["id"] for row in runnable if row["kind"]=="combination")==Set(["K1","K3"])
+    @test length(unique(row["case_id"] for row in runnable))==51
+    @test Set(row["id"] for row in runnable if row["kind"]=="combination")==Set(["K1","K3","K4"])
+    @test Set(row["id"] for row in runnable if row["kind"]=="comparison")==Set(["E3","C3"])
     @test only(filter(row->row["id"]=="27",runnable))["threads"]==4
     @test only(filter(row->row["id"]=="29",runnable))["environment"]=="gpu"
     bench=technique_bench_plan()
-    @test length(bench)==48
-    @test count(row->row["status"]=="runnable",bench)==48
+    @test length(bench)==51
+    @test count(row->row["status"]=="runnable",bench)==51
     @test all(row["benchmark_cases"]>=1 && row["benchmark_backend"]=="BenchmarkTools"
         for row in bench if row["status"]=="runnable")
     @test all(row["benchmark_cases"]>1 for row in bench)
+    @test Dict(row["id"]=>row["benchmark_cases"] for row in bench
+        if row["id"] in ("E3","C3","K4"))==Dict("E3"=>18,"C3"=>42,"K4"=>192)
     grade=only(filter(row->row["id"]=="05",bench))
     xorjoin=only(filter(row->row["id"]=="06",bench))
     @test GaramonBench.technique_bench_config(grade)["grid"]["operation"]==["left"]
@@ -82,7 +85,7 @@
         @test only(catalog.scenarios).id==row["case_id"]
         push!(profile_cases,plan["case_id"])
     end
-    @test length(unique(profile_cases))==48
+    @test length(unique(profile_cases))==51
     requests=Dict(row["id"]=>technique_profile_request(row) for row in runnable)
     @test requests["02"]["limits"]["profile_episode_repetitions"]==4096
     @test requests["03"]["limits"]["profile_repetitions"]==100
@@ -141,5 +144,29 @@
         run_technique_bench(smoke_dir,bench_dir;ids=["23"],show_progress=false,update_article=false)
         bench_rows=TOML.parsefile(joinpath(bench_dir,"bench-progress.toml"))["technique"]
         @test Set(row["id"] for row in bench_rows)==Set(["22","23"])
+    end
+end
+
+@testset "factorial combinations and coefficient precision" begin
+    rows=Dict(row["id"]=>row for row in technique_smoke_plan())
+    for id in ("K4","C3")
+        row=rows[id]
+        config=GaramonBench.technique_bench_config(row)
+        GaramonBench.include_technique_adapter(joinpath(pkgdir(GaramonBench),row["adapter"]),config)
+        adapter=GaramonBench.ADAPTERS[config["case_defaults"]["adapter"]]
+        for case in expand_cases(config)
+            if id=="C3"
+                case["scenario"]=="garamon_cpp" && continue
+                case["horizon"]==32 || continue
+                case["bigfloat_bits"]=128
+            end
+            rng=GaramonBench.Random.Xoshiro(case["seed"])
+            fixture=Base.invokelatest(adapter.generate,case,"",rng)
+            built=Base.invokelatest(adapter.build,fixture,case,"")
+            state=Base.invokelatest(adapter.prepare,built,case,"")
+            result=Base.invokelatest(adapter.execute,state)
+            @test Base.invokelatest(adapter.oracle,state,result)
+            @test Base.invokelatest(adapter.execute,state)==result
+        end
     end
 end

@@ -1,15 +1,19 @@
+_registered_benchmark_entries(registry) = vcat(registry["technique"],
+    get(registry,"combination",Any[]),get(registry,"comparison",Any[]))
+
 """One representative oracle case per registered technique, including an
 explicit status for every roadmap entry. This is a fast screen, not full P1.
 """
 function technique_smoke_plan(;benchmark_root=dirname(@__DIR__))
     registry=TOML.parsefile(joinpath(benchmark_root,"config","techniques.toml"))
-    entries=vcat(registry["technique"],get(registry,"combination",Any[]))
+    entries=_registered_benchmark_entries(registry)
     rows=Dict{String,Any}[]
     for entry in entries
         row=Dict{String,Any}("id"=>entry["id"],
             "name"=>get(entry,"name",entry["id"]),
             "state"=>get(entry,"state","implemented"),
-            "kind"=>haskey(entry,"techniques") ? "combination" : "technique")
+            "kind"=>haskey(entry,"techniques") ? "combination" :
+                get(entry,"contract","")=="cross_library" ? "comparison" : "technique")
         if !haskey(entry,"preflight_config")
             row["status"]=entry["state"]=="research" ? "research_not_implemented" :
                 "adapter_missing"
@@ -65,7 +69,7 @@ available for the later benchmark. Planning executes no workload.
 function technique_bench_config(row;benchmark_root=dirname(@__DIR__))
     config=load_config(joinpath(benchmark_root,row["config"]))
     registry=TOML.parsefile(joinpath(benchmark_root,"config","techniques.toml"))
-    entry=only(filter(e->e["id"]==row["id"],vcat(registry["technique"],registry["combination"])))
+    entry=only(filter(e->e["id"]==row["id"],_registered_benchmark_entries(registry)))
     for (key,values) in get(entry,"benchmark_grid",Dict())
         config["grid"][key]=values
     end

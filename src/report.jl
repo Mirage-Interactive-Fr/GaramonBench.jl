@@ -127,7 +127,31 @@ const _TECHNIQUE_AXIS_MEANING=Dict(
 _technique_axis_meaning(key)=isempty(key) ? "no varying category" :
     key*" ("*get(_TECHNIQUE_AXIS_MEANING,key,"scenario parameter")*")"
 
-function _technique_caption_text(rows,parameters,total)
+const _CROSS_LIBRARY_LABELS=Dict("garamon_direct"=>"Garamon.jl direct",
+    "garamon_workspace"=>"Garamon.jl workspace","garamon_packed"=>"Garamon.jl packed",
+    "garamon_cpp"=>"Garamon C++","gal"=>"GAL","versor"=>"Versor","klein"=>"Klein")
+const _CROSS_PRECISIONS=("Float16","Float32","Float64","BigFloat")
+
+_cross_precision_label(case) = case["precision"]=="BigFloat" ?
+    "BigFloat ("*string(case["bigfloat_bits"])*" bits)" : case["precision"]
+
+function _technique_caption_text(rows,parameters,total;id="")
+    coverage=string(length(rows))*" of "*string(total)
+    if id in ("E3","C3")
+        return coverage*" planned cases have qualified timing data. "*
+            "The horizontal axis gives the number of products in a batch. "*
+            "The vertical axis gives median warm nanoseconds per product "*
+            "(median batch time divided by batch size). "*
+            (id=="C3" ? "Panels separate precisions and have independent vertical scales. " : "")*
+            "Colors identify the library and "*
+            "route. Missing points have no qualified timing in this build."
+    elseif id=="K4"
+        return coverage*" planned cases have qualified timing data. "*
+            "The horizontal axis lists the enabled techniques. Each point is the median warm "*
+            "time relative to the reference on the same input and seed. The dashed line "*
+            "marks equal time. Separate panels distinguish the two batch sizes, and colors "*
+            "identify dimensions. Points sharing a configuration can come from either seed."
+    end
     color_key,marker_key=_technique_plot_axes(rows,parameters)
     cases=[parameters[r.case_id] for r in rows]
     unencoded=[key*"="*join(sort!(unique(string(get(case,key,"")) for case in cases);
@@ -135,7 +159,6 @@ function _technique_caption_text(rows,parameters,total)
             something(tryparse(Float64,value),0.0),value)),"/")
         for key in _TECHNIQUE_PLOT_AXES if key!=color_key && key!=marker_key &&
         length(unique(string(get(case,key,"")) for case in cases))>1]
-    coverage=string(length(rows))*" of "*string(total)
     grouping=isempty(color_key) ?
         "The completed cases have no varying color category. " :
         "Color distinguishes "*_technique_axis_meaning(color_key)*". "
@@ -149,6 +172,71 @@ function _technique_caption_text(rows,parameters,total)
     (isempty(unencoded) ? "" : "Other parameters varying among the completed cases but not encoded by color or marker are "*join(unencoded,", ")*"; points may overlap. ")*
     "Preparation, memory, and complete-episode costs are not shown in this panel."
     replace(caption,"_"=>"\\_")
+end
+
+function _draw_campaign_extension(cairo,id,rows,parameters,total,destination)
+    colors=["#0072B2","#D55E00","#009E73","#88419D","#B58900","#505F6D"]
+    height=id=="C3" ? 760 : id=="K4" ? 700 : 525
+    figure=cairo.Figure(size=(1200,height),fontsize=20)
+    qualified=string(length(rows))*"/"*string(total)*" qualified cases"
+    scenario(row)=parameters[row.case_id]["scenario"]
+    horizon(row)=parameters[row.case_id]["horizon"]
+    if id in ("E3","C3")
+        precs=id=="E3" ? ("Float32",) : _CROSS_PRECISIONS
+        order=id=="E3" ? ("garamon_direct","garamon_workspace","garamon_cpp","gal","versor","klein") :
+            ("garamon_direct","garamon_workspace","garamon_packed","garamon_cpp")
+        markers=[:circle,:rect,:diamond,:utriangle,:dtriangle,:pentagon]
+        for (i,precision) in enumerate(precs)
+            subset=filter(r->parameters[r.case_id]["precision"]==precision,rows)
+            title=isempty(subset) ? precision : _cross_precision_label(parameters[first(subset).case_id])
+            axis=cairo.Axis(figure[cld(i,2),mod1(i,2)];title,
+                xlabel="Products per batch",ylabel="Median warm time (ns/product)",
+                xscale=log2,yscale=log10,xticks=([1,32,1024],["1","32","1024"]))
+            cairo.xlims!(axis,0.7,1450)
+            if isempty(subset)
+                cairo.ylims!(axis,1,10)
+                cairo.text!(axis,32,3;text="Timing pending",align=(:center,:center))
+            end
+            for (j,route) in enumerate(order)
+                points=sort(filter(r->scenario(r)==route,subset);by=horizon)
+                isempty(points) && continue
+                cairo.scatterlines!(axis,horizon.(points),
+                    [r.median_ns/horizon(r) for r in points];
+                    color=colors[j],marker=markers[j])
+            end
+        end
+        cairo.Label(figure[0,1:(id=="E3" ? 1 : 2)],"EGA3 — "*qualified;fontsize=22)
+        measured=findall(route->any(r->scenario(r)==route,rows),collect(order))
+        cairo.Legend(figure[1:cld(length(precs),2),id=="E3" ? 2 : 3],
+            [cairo.MarkerElement(;color=colors[j],marker=markers[j]) for j in measured],
+            [_CROSS_LIBRARY_LABELS[order[j]] for j in measured],"Library and route";
+            framevisible=false)
+    else
+        variants=["reference","D","W","R","G","DW","DR","DG","WR","WG","RG",
+            "DWR","DWG","DRG","WRG","DWRG"]
+        lower,upper,_=_technique_ratio_limits(rows)
+        for (i,batch) in enumerate((1,32))
+            axis=cairo.Axis(figure[i,1];title="Batch of "*string(batch)*" — "*qualified,
+                xlabel=i==2 ? "Enabled techniques" : "",
+                ylabel="Warm time / reference",yscale=log10,
+                xticks=(eachindex(variants),[ "Ref."; variants[2:end]]),
+                yticks=_technique_ratio_ticks(lower,upper),xgridvisible=false)
+            cairo.hlines!(axis,[1.0];color=:black,linestyle=:dash)
+            for (j,n) in enumerate((3,5,8))
+                points=filter(r->r.dimension==n && horizon(r)==batch,rows)
+                isempty(points) && continue
+                x=[findfirst(==(scenario(r)),variants)+0.14*(j-2) for r in points]
+                cairo.scatter!(axis,x,getproperty.(points,:time_ratio);
+                    color=colors[j],marker=[:circle,:rect,:diamond][j],label="n = "*string(n))
+            end
+            cairo.xlims!(axis,0.5,length(variants)+0.5)
+            cairo.ylims!(axis,lower,upper)
+            any(r->horizon(r)==batch,rows) &&
+                cairo.Legend(figure[i,2],axis,"Dimension";framevisible=false)
+        end
+    end
+    cairo.save(destination,figure)
+    destination
 end
 
 function _technique_plot_axes(rows,parameters)
@@ -231,6 +319,8 @@ end
 function _draw_technique_plot(cairo,row,rows,parameters,total,destination;
                                        budget_skips=NamedTuple[])
     isempty(rows) && error("no qualified technique cases to plot")
+    row["id"] in ("E3","C3","K4") &&
+        return _draw_campaign_extension(cairo,row["id"],rows,parameters,total,destination)
     lower,upper,exclusion_y=_technique_ratio_limits(rows;
         has_exclusions=!isempty(budget_skips))
     ratio_ticks=_technique_ratio_ticks(lower,upper)
@@ -308,7 +398,7 @@ function _publish_technique_plot(row,rows,parameters,total,figure_root;
         _publish_article_pdf(built,figure)
     end
     caption=joinpath(figure_root,"plot_technique_"*row["id"]*"_caption.tex")
-    _publish_article_text(_technique_caption_text(rows,parameters,total),caption)
+    _publish_article_text(_technique_caption_text(rows,parameters,total;id=row["id"]),caption)
     pending=joinpath(figure_root,"plot_technique_"*row["id"]*"_pending.tex")
     isfile(pending) && rm(pending)
     figure,caption
@@ -638,7 +728,7 @@ function _read_verified_technique_report(technique,provenance_path,provenance)
         isfinite(ratio) && ratio>0 && baseline>0 &&
             isapprox(ratio,candidate/baseline;rtol=1e-12) ||
             error("retained paired timing ratio differs")
-        (;case_id=id,dimension,time_ratio=ratio,over_baseline_budget=ratio>10)
+        (;case_id=id,dimension,median_ns=candidate,time_ratio=ratio,over_baseline_budget=ratio>10)
     end for record in _technique_csv_records(summary;lines=readlines(IOBuffer(summary_bytes)))]
     0<length(rows)==provenance["completed_cases"]<=provenance["total_cases"] &&
         length(unique(r.case_id for r in rows))==length(rows) ||

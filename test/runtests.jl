@@ -27,20 +27,18 @@ include("resource_failures.jl")
     source=joinpath(pkgdir(GaramonBench),"papers",
         "Garamon_research_article_2026-09-27_en.tex")
     content=read(source,String)
-    @test occursin("\\newcommand{\\pendingfigure}",content)
     @test occursin("preflight_technique_#1.pdf",content)
     @test occursin("The displayed card verifies one oracle case",content)
     @test occursin("plot_technique_#1_caption.tex",content)
-    @test occursin("qualified_ega3_vector_libraries.pdf",content)
     @test !occursin("\\addplot",content)
     @test !occursin("exploratory_",content)
     registry=TOML.parsefile(joinpath(pkgdir(GaramonBench),"config","techniques.toml"))
     expected=Set(vcat(getindex.(registry["technique"],"id"),
-        getindex.(registry["combination"],"id")))
+        getindex.(registry["combination"],"id"),getindex.(registry["comparison"],"id")))
     figure_ids=[match.captures[1] for match in
         eachmatch(r"\\techniqueplot\{([^}]+)\}",content)]
-    @test length(figure_ids)==48
-    @test length(unique(figure_ids))==48
+    @test length(figure_ids)==51
+    @test length(unique(figure_ids))==51
     @test Set(figure_ids)==expected
     referenced_ids=Set(match.captures[1] for match in
         eachmatch(r"\\ref\{fig:technique-([^}]+)\}",content))
@@ -80,9 +78,9 @@ end
     @test all(length(row["revision"])==40 && length(row["git_tree_sha1"])==40
               for row in catalogue)
     @test all(row["status"]=="ega3_vector_product_adapter_oracle_qualified"
-              for row in catalogue if row["name"] in ("gal","versor"))
+              for row in catalogue if row["name"] in ("gal","versor","klein"))
     @test all(row["status"]=="source_only_adapter_and_oracle_not_qualified"
-              for row in catalogue if !(row["name"] in ("gal","versor")))
+              for row in catalogue if !(row["name"] in ("gal","versor","klein")))
     @test all(startswith(row["artifact"],"ga_") for row in catalogue)
     @test_throws ArgumentError ensure_external_ga_source("unknown")
     root=ensure_external_ga_source("gatl")

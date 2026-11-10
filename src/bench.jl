@@ -345,6 +345,7 @@ function technique_launch_plan(;ids=String[],gpu::Symbol=:auto)
     isempty(requested) || issubset(requested,Set(r["id"] for r in rows)) || error("unknown technique ID")
     selected=isempty(requested) ? rows : filter(r->r["id"] in requested,rows)
     groups=Dict{Tuple{String,Int},Vector{String}}()
+    sort!(selected;by=row->row["id"] in ("E3","C3","K4") ? 0 : 1)
     for row in selected
         row["environment"]=="gpu" && gpu==:off && continue
         push!(get!(groups,(row["environment"],row["threads"]),String[]),row["id"])
@@ -625,7 +626,8 @@ PerfChecker captures; `:benchmark` prepares and runs dedicated-machine grids.
 """
 function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
         phase::Symbol=:benchmark,show_progress::Bool=true,
-        article_every_cases::Int=0,allow_source_changes::Bool=false)
+        article_every_cases::Int=0,allow_source_changes::Bool=false,
+        refresh_article_on_resume::Bool=true)
     phase in (:preflight,:profiles,:benchmark) || throw(ArgumentError("invalid campaign phase"))
     article_every_cases>=0 || throw(ArgumentError("article_every_cases must be nonnegative"))
     VERSION>=v"1.13" || error("Julia 1.13 or later is required")
@@ -642,7 +644,7 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
             _queue_unmeasured_campaign_cases!(destination,
                 unique(vcat(getproperty.(groups,:ids)...)))
         end
-        if phase==:benchmark &&
+        if phase==:benchmark && refresh_article_on_resume &&
                 isdir(joinpath(destination,"benchmark"))
             _refresh_article_before_resume(destination;ids)
         end

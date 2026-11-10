@@ -626,3 +626,36 @@ preflight_config = "config/k3_shared_workspace_oracle_preflight.toml"
 preflight_adapter = "adapters/garamon_k3_shared_workspace.jl"
 preflight_environment = "."
 preflight_smoke = {dimension = 3, strategy = "shared_cached", horizon = 3}
+
+[[combination]]
+id = "K4"
+name = "dense-workspace-reflections-givens"
+techniques = ["01", "09", "17", "38"]
+contract = "interaction"
+source_repository = "benchmark"
+source = "adapters/garamon_k4_interactions.jl"
+test = "test/techniques.jl"
+preflight_config = "config/k4_interactions_preflight.toml"
+preflight_adapter = "adapters/garamon_k4_interactions.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 3, horizon = 1, scenario = "DWRG"}
+
+[[comparison]]
+id = "E3"
+name = "3D geometric algebra libraries at Float32"
+contract = "cross_library"
+benchmark_grid = {precision = ["Float32"], scenario = ["garamon_direct", "garamon_workspace", "garamon_cpp", "gal", "versor", "klein"]}
+preflight_config = "config/cross_library_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_cross_library.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 3, horizon = 1, precision = "Float32", scenario = "klein"}
+
+[[comparison]]
+id = "C3"
+name = "Garamon Julia and C++ by precision"
+contract = "cross_library"
+benchmark_grid = {scenario = ["garamon_direct", "garamon_workspace", "garamon_packed", "garamon_cpp"]}
+preflight_config = "config/cross_library_oracle_preflight.toml"
+preflight_adapter = "adapters/garamon_cross_library.jl"
+preflight_environment = "."
+preflight_smoke = {dimension = 3, horizon = 1, precision = "Float64", scenario = "garamon_cpp"}

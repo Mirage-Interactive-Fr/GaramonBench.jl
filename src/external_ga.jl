@@ -46,7 +46,7 @@ function external_ga_candidates()
             "name"=>spec.name,"artifact"=>spec.artifact,
             "revision"=>spec.revision,"git_tree_sha1"=>string(hash),
             "proposed_contract"=>spec.proposed_contract,
-            "status"=>spec.name in ("gal", "versor") ?
+            "status"=>spec.name in ("gal", "versor", "klein") ?
                 "ega3_vector_product_adapter_oracle_qualified" :
                 "source_only_adapter_and_oracle_not_qualified",
             "installed"=>isfile(joinpath(Pkg.Artifacts.artifact_path(hash),
