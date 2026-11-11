@@ -48,8 +48,9 @@ function _article_performance_entry(technique,rows,planned)
         :mixed
     end
     title=get(_ARTICLE_SUMMARY_TITLES,id,replace(get(technique,"name",id),'-'=>' '))
+    cpp_cases=count(row->!isnothing(_technique_cpp_ratio(row)),rows)
     (;id,title,group,cases,planned,wins,net=count(<=(0.90),ratios),regimes,unanimous,
-        low=minimum(ratios),mid=median(ratios),high=maximum(ratios))
+        low=minimum(ratios),mid=median(ratios),high=maximum(ratios),cpp_cases)
 end
 
 function _article_visible_asset(roots,filename)
@@ -257,6 +258,14 @@ function _article_summary_tex(io,entries,total,panels)
     end
     _article_summary_highlights(io,panels)
     _article_extension_highlights(io,entries)
+    cpp_entries=filter(entry->get(entry,:cpp_cases,0)>0,entries)
+    if !isempty(cpp_entries)
+        ids=join([raw"\ref{fig:technique-"*entry.id*"}" for entry in cpp_entries],", ")
+        println(io,raw"\par\smallskip\noindent\textbf{Garamon C++ reference.} ",
+            sum(entry.cpp_cases for entry in cpp_entries),
+            " cases also have a same-input C++ comparison in the lower panels of Figures ",
+            ids,raw". The summary tables use the Garamon.jl reference.\par")
+    end
     println(io,raw"\par\endgroup")
     if !isempty(panels)
         println(io,raw"\medskip\noindent\begin{minipage}{\linewidth}\centering")

@@ -382,7 +382,7 @@ function _check_native_stage_report(report,ids,phase)
 end
 
 function _technique_launch_command(group,output,phase,show_progress,article_every_cases,
-                                   allow_source_changes::Bool=false)
+                                   allow_source_changes::Bool=false;cpp_cache=nothing)
     code="""
     using DrWatson
     DrWatson.quickactivate($(repr(group.project)))
@@ -399,7 +399,8 @@ function _technique_launch_command(group,output,phase,show_progress,article_ever
     report = phase == "preflight" ? run_technique_smoke(preflight; ids, allow_source_changes) :
         phase == "profiles" ? run_technique_profiles(preflight, joinpath(output, "profiles"); ids) :
         run_technique_bench(preflight, joinpath(output, "benchmark"); ids,
-            show_progress=progress=="true", article_every_cases=parse(Int,every), allow_source_changes)
+            show_progress=progress=="true", article_every_cases=parse(Int,every), allow_source_changes,
+            cpp_reference_cache=get(ENV,"GARAMONBENCH_CPP_REFERENCE_CACHE",nothing))
     records=TOML.parsefile(report)["technique"]
     any(r->r["id"] in ids && r["status"]=="restart_required",records) && exit(75)
     any(r->r["id"] in ids && r["status"]=="resource_unavailable",records) && exit(76)
@@ -411,7 +412,8 @@ function _technique_launch_command(group,output,phase,show_progress,article_ever
         "--gcthreads=1","--project="*group.project,"-e",code,
         string(phase),abspath(output),string(show_progress),string(article_every_cases),string(allow_source_changes)]
     append!(args,group.ids)
-    addenv(Cmd(args),"OPENBLAS_NUM_THREADS"=>"1","OMP_NUM_THREADS"=>"1")
+    addenv(Cmd(args),"OPENBLAS_NUM_THREADS"=>"1","OMP_NUM_THREADS"=>"1",
+        "GARAMONBENCH_CPP_REFERENCE_CACHE"=>cpp_cache)
 end
 
 function _kill_detached_worker_processes(token)
@@ -671,6 +673,7 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
                 "groups"=>records))
         end
         save("running")
+        cpp_cache=phase==:benchmark ? mktempdir(;prefix="garamon-cpp-reference-") : nothing
         try
             for stage in stages, group in groups, id in group.ids
                 if stage!=:preflight && id in blocked
@@ -685,7 +688,7 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
                 println("Stage ",stage,"; threads=",native.threads,
                     "; environment=",native.environment,"; route=",id)
                 command=_technique_launch_command(native,destination,stage,
-                    show_progress,article_every_cases,allow_source_changes)
+                    show_progress,article_every_cases,allow_source_changes;cpp_cache)
                 result=_run_native_stage_resumable(command,destination,stage,id;
                   on_restart=(result,skipped_now)->begin
                     push!(records,Dict("stage"=>string(stage),"environment"=>native.environment,
@@ -726,6 +729,8 @@ function run_technique_campaign(output;ids=String[],gpu::Symbol=:auto,
         catch exception
             save(exception isa InterruptException ? "interrupted" : "failed")
             rethrow()
+        finally
+            isnothing(cpp_cache) || rm(cpp_cache;recursive=true)
         end
         report
     end

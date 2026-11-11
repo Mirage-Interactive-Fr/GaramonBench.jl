@@ -397,9 +397,18 @@ silently attributed to the other.
 
 For every comparable strategy, the campaign must measure a standard
 Garamon.jl route on exactly the same generated requests and checks both
-outputs. Standard Garamon C++ is an additional baseline where it can
-perform the same mathematical task. A speed ratio is left undefined when
-the standard route cannot finish within the declared resource budget.
+outputs. A second reference uses the generated Garamon C++ library on
+the same requests whenever the campaign can match the dimension, metric,
+arithmetic, operation, and output coefficients. Each matched C++ result
+passes the same independent coefficient check. The compiler and native
+operand preparation run before warm timing. The warm C++ measurement
+includes one call from Julia per batch and returns an owned result.
+The current build budget covers at most \(2^{20}\) basis masks. Above
+dimension 8, the generated library uses recursive products for grade
+blocks with more than 32 coefficients. Degenerate metrics use recursive
+products throughout to avoid missing generated functions for vanishing
+grade blocks. A ratio requires a qualified timing for its corresponding
+reference.
 Alternative complete execution routes may share one figure and one
 baseline; composable techniques are evaluated in separate interaction
 experiments rather than presented as mutually exclusive choices.
@@ -416,8 +425,10 @@ the number of nonzero coefficients. A point is one completed parameter
 combination, checked against an independent exact oracle before timing.
 Its vertical coordinate is the median warm execution time of the named
 route divided by the median warm time of its own same-input standard
-Garamon.jl route. One is equal time (black dashed line); below one
-favors the named route for that warm call. The vertical scale follows
+Garamon.jl route. When available, the lower panel uses the generated
+Garamon C++ reference for the same case. The markers and colors identify
+the same scenarios in both panels. The black dashed line marks equal
+time, and values below one favor the named route. The vertical scale follows
 the completed ratios; it is not fixed to a remote value such as
 \(10^{-4}\), and measured points are not clipped to a threshold.
 When a case exceeds ten times the baseline, a red dotted line at ten

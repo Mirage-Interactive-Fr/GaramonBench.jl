@@ -151,6 +151,25 @@ end
     end
 end
 
+@testset "C++ reference preserves case identity and covers supported dimensions" begin
+    plan=Dict(row["id"]=>row for row in technique_smoke_plan())
+    config=GaramonBench.technique_bench_config(plan["01"])
+    cases=expand_cases(config)
+    shards=GaramonBench._cpp_reference_shards(config)
+    cpp_cases=vcat((expand_cases(shard.config) for shard in shards)...)
+    @test Set(case_id.(cases))==Set(case_id.(GaramonBench._cpp_reference_original.(cpp_cases)))
+    @test all(case["baseline_required"] for case in expand_cases(config))
+    @test maximum(case["dimension"] for case in cpp_cases)==12
+
+    tuning=GaramonBench.technique_bench_config(plan["11"])
+    originals=filter(case->case["dimension"]<=GaramonBench._CPP_REFERENCE_MAX_DIMENSION,
+        expand_cases(tuning))
+    references=vcat((expand_cases(shard.config) for shard in GaramonBench._cpp_reference_shards(tuning))...)
+    @test length(references)<length(originals)
+    @test Set(GaramonBench._cpp_reference_match_id.(originals))==
+        Set(GaramonBench._cpp_reference_match_id.(GaramonBench._cpp_reference_original.(references)))
+end
+
 @testset "technique article data use validated same-case baselines" begin
     mktempdir() do root
         archive=joinpath(root,"benchmark","28")

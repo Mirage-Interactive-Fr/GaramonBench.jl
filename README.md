@@ -181,6 +181,18 @@ The article uses the qualified cases from these archives. External plots
 show warm nanoseconds per product after operand preparation. The factorial
 plot shows the paired warm-time ratio against the all-off reference.
 
+The dedicated launch also runs generated Garamon C++ as a second reference
+for compatible cases in their original dimensions and metrics. These runs
+use the same fixture generator and check the requested coefficients against
+the original independent oracle. They support the product, wedge,
+contraction, and product-chain contracts covered by the native adapter.
+Generated builds are budgeted up to dimension 20. Their inputs and result
+types match the corresponding case. If a metric build or oracle check fails,
+the worker reports that group and continues the campaign. Reference timings
+are resumable under `cpp-reference/<technique>/<dimension-and-signature>/`.
+The article adds a C++ panel and summary CSV columns wherever both timings
+qualify on the same machine.
+
 If an explicitly requested new output directory is denied by filesystem
 permissions, the code warns and selects a deterministic directory under
 `data/garamonbench/output-fallback/`. Repeating the original call resolves to

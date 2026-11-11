@@ -46,12 +46,79 @@ end
 Ratios always use the standard baseline on that exact case, including cached
 baseline measurements. They never compare different scenario inputs.
 """
+function _cpp_reference_timings(row,archive,original_manifest)
+    timings=Dict{String,NamedTuple}()
+    root=_cpp_reference_root(archive,row["id"])
+    isdir(root) || return timings
+    for group in readdir(root;join=true)
+        isfile(joinpath(group,"campaign.toml")) || continue
+        try
+            manifest=TOML.parsefile(joinpath(group,"campaign.toml"))
+            manifest["condition"]=="isolated" &&
+                manifest["machine"]["sha256"]==original_manifest["machine"]["sha256"] || continue
+            config=_technique_archive_config(group)
+            samples=config["limits"]["samples"]
+            fixture_sources=Dict{String,Vector{String}}()
+            for case in expand_cases(config)
+                case["adapter"]==_CPP_REFERENCE_ADAPTER || error("unexpected C++ reference adapter")
+                directory=joinpath(group,"cases",case_id(case))
+                isfile(joinpath(directory,"completion.toml")) || continue
+                marker=_resume_verify_case(directory,case,manifest["run_signature"],samples;
+                    backend="benchmarktools")
+                warm=_bench_warm_times(joinpath(directory,"samples.csv"))
+                length(warm)==samples && all(t->isfinite(t) && t>0,warm) ||
+                    error("invalid C++ reference timings")
+                id=_cpp_reference_match_id(_cpp_reference_original(case))
+                timings[id]=(median_ns=median(warm),
+                    sources=_cpp_fixture_sources(fixture_sources,row,group,manifest,marker))
+            end
+        catch exception
+            exception isa InterruptException && rethrow()
+            @warn "C++ reference data could not be read" group reason=failure_message(exception)
+        end
+    end
+    timings
+end
+
+function _cpp_fixture_sources(cache,row,archive,manifest,marker)
+    signature=get(marker,"execution_signature",manifest["run_signature"])
+    get!(cache,signature) do
+        initial=signature==manifest["run_signature"]
+        execution=initial ? manifest :
+            only(r for r in manifest["source_revisions"] if r["run_signature"]==signature)
+        repositories=execution["repositories"]
+        files=Dict(f["path"]=>f["sha256"] for f in repositories["benchmark"]["files"])
+        sources=[get(files,row["adapter"],"")]
+        if row["id"] in ("02","08","09","14","27")
+            # The archived generator can be identical even if the same file's
+            # Julia preparation or execution kernels were later refactored.
+            revision_root=initial ? archive : joinpath(archive,"revisions",signature)
+            relative="adapters/julia_products_kernels.jl"
+            snapshot=joinpath(revision_root,"sources","benchmark",relative)
+            digest=get(files,relative,"")
+            generator=if isfile(snapshot) && _resume_sha(snapshot)==digest
+                match(r"(?ms)^function gb_generate_vectors\(.*?^end\s*$",read(snapshot,String))
+            else
+                nothing
+            end
+            push!(sources,isnothing(generator) ? digest : bytes2hex(sha256(strip(generator.match))))
+        elseif row["id"]=="26"
+            push!(sources,get(files,"adapters/garamon_triple_join.jl",""))
+        elseif row["id"] in ("28","29")
+            push!(sources,repositories["julia"]["sha256"])
+        end
+        sources
+    end
+end
+
 function _technique_report_rows(row,config,archive)
     manifest=TOML.parsefile(joinpath(archive,"campaign.toml"))
     manifest["condition"]=="isolated" ||
         error("article technique plots require an isolated campaign")
     config["campaign"]["condition"]=="isolated" || error("unqualified report configuration")
     samples=config["limits"]["samples"]
+    cpp_timings=_cpp_reference_timings(row,archive,manifest)
+    fixture_sources=Dict{String,Vector{String}}()
     rows=NamedTuple[]
     parameters=Dict{String,Any}()
     for case in _technique_archived_cases(config,manifest;archive)
@@ -75,6 +142,9 @@ function _technique_report_rows(row,config,archive)
         value=median(warm)
         reference=median(baseline)
         ratio=reference>0 ? value/reference : NaN
+        cpp=isempty(cpp_timings) ? nothing : get(cpp_timings,_cpp_reference_match_id(case),nothing)
+        cpp_time=!isnothing(cpp) && cpp.sources==_cpp_fixture_sources(fixture_sources,row,archive,manifest,marker) ?
+            cpp.median_ns : nothing
         push!(rows,(technique=row["id"],case_id=id,
             execution_signature=get(marker,"execution_signature",manifest["run_signature"]),
             dimension=get(case,"dimension",0),
@@ -96,12 +166,16 @@ function _technique_report_rows(row,config,archive)
             seed=case["seed"],samples=samples,median_ns=value,
             q25_ns=quantile(warm,0.25),q75_ns=quantile(warm,0.75),
             baseline_name=verdict["baseline_name"],baseline_median_ns=reference,
+            cpp_baseline_median_ns=cpp_time,
+            cpp_time_ratio=isnothing(cpp_time) ? nothing : value/cpp_time,
             time_ratio=ratio,over_baseline_budget=isfinite(ratio) && ratio>10,
             condition="isolated"))
         parameters[id]=case
     end
     rows,parameters
 end
+
+_technique_cpp_ratio(row)=get(row,:cpp_time_ratio,nothing)
 
 const _TECHNIQUE_PLOT_AXES=("strategy","support","grade_pair","trace",
     "scenario","structure","horizon","request_index","operation","signature","family","capacity_plans",
@@ -165,12 +239,19 @@ function _technique_caption_text(rows,parameters,total;id="")
     grouping*=isempty(marker_key) ?
         "No second category is encoded by marker shape. " :
         "Marker shape distinguishes "*_technique_axis_meaning(marker_key)*". "
+    cpp_count=count(r->!isnothing(_technique_cpp_ratio(r)),rows)
     caption="The horizontal axis is algebra dimension; "*coverage*
     " planned cases have qualified timing data. Each timed point is this route's "*
     "median warm time divided by standard Garamon.jl's median warm time "*
     "on the same input; a ratio below one means a faster warm execution. "*grouping*
     (isempty(unencoded) ? "" : "Other parameters varying among the completed cases but not encoded by color or marker are "*join(unencoded,", ")*"; points may overlap. ")*
     "Preparation, memory, and complete-episode costs are not shown in this panel."
+    if cpp_count>0
+        caption*=" The lower panel divides the same route's warm time by the "*
+            "generated Garamon C++ reference time. "*string(cpp_count)*" of "*string(length(rows))*
+            " plotted Julia cases have an oracle-validated C++ measurement for the same input, "*
+            "dimension, metric, operation, and output."
+    end
     replace(caption,"_"=>"\\_")
 end
 
@@ -331,7 +412,8 @@ function _draw_technique_plot(cairo,row,rows,parameters,total,destination;
         sort!(unique(_technique_plot_value(parameters,r.case_id,marker_key) for r in rows))
     colors=["#0072B2","#D55E00","#009E73","#88419D","#B58900","#505F6D"]
     markers=[:circle,:rect,:diamond,:utriangle]
-    figure=cairo.Figure(size=(1200,610),backgroundcolor=:white,fontsize=18)
+    cpp_rows=filter(r->!isnothing(_technique_cpp_ratio(r)),rows)
+    figure=cairo.Figure(size=(1200,isempty(cpp_rows) ? 610 : 980),backgroundcolor=:white,fontsize=18)
     axis=cairo.Axis(figure[1,1],
         title=row["id"]*" "*get(_TECHNIQUE_PLOT_TITLES,row["id"],row["name"])*
             " — "*string(length(rows))*"/"*string(total)*" qualified cases",
@@ -342,6 +424,21 @@ function _draw_technique_plot(cairo,row,rows,parameters,total,destination;
         ygridcolor=(:gray,0.16),topspinevisible=false,rightspinevisible=false)
     dimensions=sort!(unique(r.dimension for r in rows))
     length(dimensions)<=10 && (axis.xticks[]=dimensions)
+    cpp_axis=if isempty(cpp_rows)
+        nothing
+    else
+        cpp_lower,cpp_upper,_=_technique_ratio_limits((;time_ratio=r.cpp_time_ratio) for r in cpp_rows)
+        comparison=cairo.Axis(figure[2,1],
+            title=string(length(cpp_rows))*" cases with a same-input C++ reference",
+            xlabel="Algebra dimension",ylabel="Warm time / Garamon C++",
+            yscale=log10,yticks=_technique_ratio_ticks(cpp_lower,cpp_upper),
+            xgridvisible=false,ygridcolor=(:gray,0.16),topspinevisible=false,rightspinevisible=false)
+        length(dimensions)<=10 && (comparison.xticks[]=dimensions)
+        cairo.hlines!(comparison,[1.0];color=:black,linestyle=:dash,linewidth=1.5)
+        cairo.ylims!(comparison,cpp_lower,cpp_upper)
+        cairo.linkxaxes!(axis,comparison)
+        comparison
+    end
     for (color_index,color_value) in enumerate(colored),
         (marker_index,marker_value) in enumerate(marked)
         points=filter(r->_technique_plot_value(parameters,r.case_id,color_key)==color_value &&
@@ -359,6 +456,12 @@ function _draw_technique_plot(cairo,row,rows,parameters,total,destination;
         cairo.scatter!(axis,[r.dimension+offset for r in points],
             [r.time_ratio for r in points];
             color,marker,markersize=11,strokecolor=:white,strokewidth=0.7,label)
+        if !isnothing(cpp_axis)
+            paired=filter(r->!isnothing(_technique_cpp_ratio(r)),points)
+            isempty(paired) || cairo.scatter!(cpp_axis,[r.dimension+offset for r in paired],
+                [r.cpp_time_ratio for r in paired];
+                color,marker,markersize=11,strokecolor=:white,strokewidth=0.7)
+        end
     end
     cairo.hlines!(axis,[1.0];color=:black,linestyle=:dash,linewidth=1.5)
     if any(r->r.time_ratio>10,rows)
@@ -380,7 +483,7 @@ function _draw_technique_plot(cairo,row,rows,parameters,total,destination;
         (note*=" Red dotted line: 10× review threshold.")
     !isempty(budget_skips) &&
         (note*=" Red crosses at the chart top: resource exclusions, not ratios.")
-    cairo.Label(figure[2,1:2],note;fontsize=16)
+    cairo.Label(figure[isnothing(cpp_axis) ? 2 : 3,1:2],note;fontsize=16)
     cairo.save(destination,figure)
     destination
 end
@@ -511,7 +614,7 @@ function _article_recovery_index(output,processed_root,benchmark_root)
     reports=Dict{String,Vector{String}}()
     archives=Dict{String,Vector{String}}()
     visited=Set{String}()
-    excluded=Set([".git","sources","revisions","environment","environments",
+    excluded=Set([".git","sources","revisions","environment","environments","cpp-reference",
         "cases","staging","unmeasured-attempts","_baselines","preflight","profiles","compiled","build"])
     roots=abspath.([processed_root,output,joinpath(benchmark_root,"data"),
         joinpath(benchmark_root,"gpu","data")])
@@ -728,7 +831,15 @@ function _read_verified_technique_report(technique,provenance_path,provenance)
         isfinite(ratio) && ratio>0 && baseline>0 &&
             isapprox(ratio,candidate/baseline;rtol=1e-12) ||
             error("retained paired timing ratio differs")
-        (;case_id=id,dimension,median_ns=candidate,time_ratio=ratio,over_baseline_budget=ratio>10)
+        cpp=tryparse(Float64,get(record,"cpp_baseline_median_ns",""))
+        cpp_ratio=tryparse(Float64,get(record,"cpp_time_ratio",""))
+        (isnothing(cpp) && isnothing(cpp_ratio) ||
+            !isnothing(cpp) && isfinite(cpp) && cpp>0 &&
+            !isnothing(cpp_ratio) && cpp_ratio>0 &&
+            isapprox(cpp_ratio,candidate/cpp;rtol=1e-12)) ||
+            error("retained C++ timing ratio differs")
+        (;case_id=id,dimension,median_ns=candidate,time_ratio=ratio,
+          cpp_baseline_median_ns=cpp,cpp_time_ratio=cpp_ratio,over_baseline_budget=ratio>10)
     end for record in _technique_csv_records(summary;lines=readlines(IOBuffer(summary_bytes)))]
     0<length(rows)==provenance["completed_cases"]<=provenance["total_cases"] &&
         length(unique(r.case_id for r in rows))==length(rows) ||

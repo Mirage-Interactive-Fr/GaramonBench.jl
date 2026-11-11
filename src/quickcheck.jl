@@ -300,7 +300,8 @@ does not invoke PerfChecker and never reuses another machine's timing data.
 function run_technique_bench(preflight,output;ids=String[],
                              show_progress::Bool=true,
                              update_article::Bool=true,
-                             article_every_cases::Int=0,allow_source_changes::Bool=false)
+                             article_every_cases::Int=0,allow_source_changes::Bool=false,
+                             cpp_reference_cache=nothing)
     article_every_cases>=0 || throw(ArgumentError("article_every_cases must be nonnegative"))
     root=dirname(@__DIR__)
     rows=technique_bench_plan(;benchmark_root=root)
@@ -320,6 +321,25 @@ function run_technique_bench(preflight,output;ids=String[],
             "benchmark_cases"=>get(row,"benchmark_cases",0),
             "case_id"=>get(row,"case_id",""))
         directory=joinpath(output,row["id"])
+        if !isnothing(cpp_reference_cache) && row["status"]=="runnable"
+            config=technique_bench_config(row;benchmark_root=root)
+            if !isempty(_cpp_reference_shards(config))
+                try
+                    adapter=joinpath(root,row["adapter"])
+                    if !(adapter in included)
+                        include_technique_adapter(adapter,config)
+                        push!(included,adapter)
+                    end
+                    result["cpp_reference"]=Base.invokelatest(_run_cpp_reference,row,config,
+                        directory,cpp_reference_cache;allow_source_changes)
+                catch exception
+                    exception isa InterruptException && rethrow()
+                    result["cpp_reference"]=Dict("status"=>"incomplete",
+                        "reason"=>failure_message(exception))
+                    @warn "Garamon C++ reference incomplete; continuing Julia benchmarks" id=row["id"] reason=failure_message(exception)
+                end
+            end
+        end
         if row["status"]!="runnable"
             result["status"]=row["status"]
         elseif isdir(directory) && _completed_technique_archive(
